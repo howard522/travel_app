@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import 'package:go_router/go_router.dart';
+
 import '../providers/trip_providers.dart';
 import '../providers/auth_providers.dart';
 import '../models/trip.dart';
@@ -73,6 +76,6 @@ class _TripTile extends StatelessWidget {
         subtitle: Text(
             '${trip.startDate.toLocal().toString().split(' ').first} ➜ ${trip.endDate.toLocal().toString().split(' ').first}'),
         trailing: const Icon(Icons.chevron_right),
-        onTap: () => Navigator.pushNamed(context, '/trip/${trip.id}'),
+        onTap: () => context.push('/trip/${trip.id}'),
       );
 }

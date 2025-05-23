@@ -58,6 +58,8 @@ dependencies:
 
   google_sign_in: ^6.2.1
   flutter_signin_button: ^2.0.0
+  flutter_google_places_sdk: ^0.4.2+1
+  reorderables: ^0.6.0
 
 dev_dependencies:
   flutter_test:

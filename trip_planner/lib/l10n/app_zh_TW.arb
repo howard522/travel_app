@@ -1,0 +1,7 @@
+{
+  "@@locale": "zh_TW",
+  "appTitle": "旅遊管家",
+  "homeHello": "嗨，{name}！",
+  "addTrip": "新增行程",
+  "offlineBanner": "目前離線，變更將於恢復連線後自動同步"
+}

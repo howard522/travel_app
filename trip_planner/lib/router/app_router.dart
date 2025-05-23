@@ -35,13 +35,12 @@ final appRouter = GoRouter(
 
   /// 未登入 → 強制跳 /login；已登入且在 /login → 轉回 /
   redirect: (ctx, state) {
-    final ref = ProviderScope.containerOf(ctx);
-    final user = ref.read(authStateProvider).value;
-    final loggingIn = state.uri.toString() == '/login';
-    if (user == null && !loggingIn) return '/login';
-    if (user != null && loggingIn) return '/';
-    return null;
-  },
+  final user = FirebaseAuth.instance.currentUser;   // ← 直接查 Firebase
+  final loggingIn = state.uri.toString() == '/login';
+  if (user == null && !loggingIn) return '/login';
+  if (user != null && loggingIn) return '/';
+  return null;
+},
 
   errorBuilder: (_, __) =>
       const Scaffold(body: Center(child: Text('404'))),

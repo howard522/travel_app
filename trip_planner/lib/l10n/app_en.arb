@@ -1,0 +1,13 @@
+{
+  "@@locale": "en",
+  "appTitle": "Trip Planner",
+  "homeHello": "Hello, {name}!",
+  "@homeHello": {
+    "description": "Greeting on the home page",
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "addTrip": "Add trip",
+  "offlineBanner": "You are offline. Changes will sync automatically."
+}
