@@ -13,6 +13,7 @@ class PlaceSearchService {
       {'query': query, 'key': apiKey, 'language': 'zh-TW'},
     );
     final res = await http.get(uri);
+    print(res.body);
     if (res.statusCode != 200) throw res.body;
     final json = jsonDecode(res.body) as Map;
     if (json['status'] != 'OK') throw json['status'];
