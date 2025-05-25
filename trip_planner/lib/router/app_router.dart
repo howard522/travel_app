@@ -1,42 +1,31 @@
-import 'dart:async';
+import 'dart:async';                            // ← StreamSubscription
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // ← FirebaseAuth
 
-import '../models/trip.dart';
 import '../pages/sign_in_page.dart';
 import '../pages/home_page.dart';
 import '../pages/trip_page.dart';
 import '../pages/expense_page.dart';
-
-/* ───────────────────────────────── router ─────────────────────────────── */
+import '../providers/auth_providers.dart';
 
 final appRouter = GoRouter(
-  refreshListenable: _GoRouterRefresh(),
+  refreshListenable: _GoRouterRefresh(),          // 監聽登入狀態
   routes: [
-    GoRoute(
-      path: '/login',
-      builder: (_, __) => const SignInPage(),
-    ),
-
+    GoRoute(path: '/login', builder: (_, __) => const SignInPage()),
     GoRoute(
       path: '/',
       builder: (_, __) => const HomePage(),
       routes: [
         GoRoute(
           path: 'trip/:id',
-          builder: (_, state) {
-            final id   = state.pathParameters['id']!;
-            final trip = state.extra as Trip?;   // extra 可能為 null
-            return TripPage(tripId: id, trip: trip);
-          },
+          builder: (_, s) => TripPage(tripId: s.pathParameters['id']!),
           routes: [
-            
             GoRoute(
               path: 'expense',
-              builder: (_, state) => ExpensePage(
-                tripId: state.pathParameters['id']!,   // 共用上一層的 :id
-              ),
+              builder: (_, s) =>
+                  ExpensePage(tripId: s.pathParameters['id']!),
             ),
           ],
         ),
@@ -44,21 +33,20 @@ final appRouter = GoRouter(
     ),
   ],
 
-  /* -------------- 自動導向（登入 / 未登入） ----------------- */
-  redirect: (_, state) {
-    final user      = FirebaseAuth.instance.currentUser;
-    final loggingIn = state.uri.path == '/login';
-    if (user == null && !loggingIn) return '/login';
-    if (user != null && loggingIn)  return '/';
-    return null;
-  },
+  /// 未登入 → 強制跳 /login；已登入且在 /login → 轉回 /
+  redirect: (ctx, state) {
+  final user = FirebaseAuth.instance.currentUser;   // ← 直接查 Firebase
+  final loggingIn = state.uri.toString() == '/login';
+  if (user == null && !loggingIn) return '/login';
+  if (user != null && loggingIn) return '/';
+  return null;
+},
 
   errorBuilder: (_, __) =>
       const Scaffold(body: Center(child: Text('404'))),
 );
 
-/* ───────────────────────────────── listener ───────────────────────────── */
-
+/// 把 Firebase authStateChanges() 包成 Listenable，提供給 GoRouter refresh
 class _GoRouterRefresh extends ChangeNotifier {
   _GoRouterRefresh() {
     _sub = FirebaseAuth.instance
