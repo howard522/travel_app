@@ -13,17 +13,27 @@ class PlaceSearchService {
       {'query': query, 'key': apiKey, 'language': 'zh-TW'},
     );
     final res = await http.get(uri);
-    if (res.statusCode != 200) throw res.body;
-    final json = jsonDecode(res.body) as Map;
-    if (json['status'] != 'OK') throw json['status'];
-    return (json['results'] as List).map((e) {
-      final loc = e['geometry']['location'];
-      return PlaceSuggestion(
-        name: e['name'],
-        lat: (loc['lat'] as num).toDouble(),
-        lng: (loc['lng'] as num).toDouble(),
-      );
-    }).toList();
+    if (res.statusCode != 200) {
+      throw Exception('Network error: ${res.statusCode}');
+    }
+    final json = jsonDecode(res.body) as Map<String, dynamic>;
+    final status = json['status'] as String? ?? 'UNKNOWN';
+
+    if (status == 'OK') {
+      return (json['results'] as List).map((e) {
+        final loc = e['geometry']['location'];
+        return PlaceSuggestion(
+          name: e['name'] as String,
+          lat: (loc['lat'] as num).toDouble(),
+          lng: (loc['lng'] as num).toDouble(),
+        );
+      }).toList();
+    } else if (status == 'ZERO_RESULTS') {
+      // 找不到時回傳空清單，不丟例外
+      return [];
+    } else {
+      throw Exception('Places API error: $status');
+    }
   }
 }
 

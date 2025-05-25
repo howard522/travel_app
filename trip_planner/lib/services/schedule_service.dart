@@ -1,58 +1,35 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
-/// 使用 Google Routes API — Waypoint Optimization
 class ScheduleService {
   ScheduleService(this.apiKey);
   final String apiKey;
 
-  /// waypoints = [ "24.142,120.682", "24.152,120.69" ... ]
-  Future<List<String>> optimize(List<String> waypoints) async {
-    if (waypoints.length <= 2) return waypoints;
-
-    final url = Uri.https(
-      'routes.googleapis.com',
-      '/directions/v2:computeRoutes',
-    );
-
-    // API 文件詳見: https://developers.google.com/maps/documentation/routes
-    final body = {
-      "origin": {"location": {"latLng": toLatLng(waypoints.first)}},
-      "destination": {"location": {"latLng": toLatLng(waypoints.last)}},
-      "intermediates": waypoints
-          .sublist(1, waypoints.length - 1)
-          .map((w) => {"location": {"latLng": toLatLng(w)}})
-          .toList(),
-      "travelMode": "DRIVE",
-      "optimizeWaypointOrder": true
-    };
-
-    final res = await http.post(
-      url,
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Goog-Api-Key': apiKey,
-        'X-Goog-FieldMask': 'routes.optimizedIntermediateWaypointIndex'
+  /// 取得最優化後的 waypoint 順序
+  /// waypoints：不含起點終點的中繼站字串列表，格式 ["lat,lng", …]
+  Future<List<int>> optimize(List<String> waypoints) async {
+    if (waypoints.length < 2) return List.generate(waypoints.length, (i) => i);
+    // 假定第一／最後站不變，用所有站當中繼排
+    final wp = waypoints.join('|');
+    final uri = Uri.https(
+      'maps.googleapis.com',
+      '/maps/api/directions/json',
+      {
+        'origin': waypoints.first,
+        'destination': waypoints.last,
+        'waypoints': 'optimize:true|$wp',
+        'key': apiKey,
       },
-      body: jsonEncode(body),
     );
-
-    if (res.statusCode != 200) throw res.body;
-    final data = jsonDecode(res.body) as Map;
-    final idx = (data['routes'][0]['optimizedIntermediateWaypointIndex'] as List)
-        .cast<int>();
-
-    // 返回「最佳順序」的 waypoint 清單
-    final optimized = [
-      waypoints.first,
-      ...idx.map((i) => waypoints.sublist(1, waypoints.length - 1)[i]),
-      waypoints.last
-    ];
-    return optimized;
-  }
-
-  Map<String, dynamic> toLatLng(String latLng) {
-    final parts = latLng.split(',');
-    return {"latitude": double.parse(parts[0]), "longitude": double.parse(parts[1])};
+    final res = await http.get(uri);
+    if (res.statusCode != 200) {
+      throw Exception('Directions API error: ${res.statusCode}');
+    }
+    final json = jsonDecode(res.body) as Map<String, dynamic>;
+    if ((json['status'] as String) != 'OK') {
+      throw Exception('Directions API status: ${json['status']}');
+    }
+    // 回傳 routes[0].waypoint_order，裡面是中繼站最佳化後的原始索引
+    return List<int>.from(json['routes'][0]['waypoint_order'] as List);
   }
 }

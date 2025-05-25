@@ -1,14 +1,17 @@
+// lib/pages/trip_page.dart
+
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:reorderables/reorderables.dart';
 
 import '../providers/place_providers.dart';
 import '../providers/trip_providers.dart';
+import '../repositories/trip_repository.dart';
 import '../models/place.dart';
 import '../services/place_search_service.dart';
-import '../repositories/trip_repository.dart';   // ← 新增這行
-
+import '../services/schedule_service.dart';
 
 class TripPage extends ConsumerStatefulWidget {
   const TripPage({super.key, required this.tripId});
@@ -20,8 +23,8 @@ class TripPage extends ConsumerStatefulWidget {
 
 class _TripPageState extends ConsumerState<TripPage> {
   GoogleMapController? _map;
-  static const _initPos = CameraPosition(
-      target: LatLng(23.5, 121.0), zoom: 6.5); // 臺灣中心
+  static const _initPos =
+      CameraPosition(target: LatLng(23.5, 121), zoom: 6.5); // Taiwan
 
   @override
   Widget build(BuildContext context) {
@@ -29,7 +32,46 @@ class _TripPageState extends ConsumerState<TripPage> {
     final repo = ref.read(tripRepoProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Trip Map')),
+      appBar: AppBar(
+        title: const Text('Trip Planner'),
+        actions: [
+          IconButton(
+            tooltip: '智慧最佳化路線',
+            icon: const Icon(Icons.flash_on_outlined),
+            onPressed: () async {
+              final places = placesAsync.valueOrNull;
+              if (places == null || places.length < 3) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('需要至少 3 個景點才能最佳化')),
+                );
+                return;
+              }
+              final apiKey = const String.fromEnvironment('ROUTES_API_KEY');
+              if (apiKey.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('請以 --dart-define=ROUTES_API_KEY=... 執行')),
+                );
+                return;
+              }
+              final svc = ScheduleService(apiKey);
+              final latlngs = places.map((p) => '${p.lat},${p.lng}').toList();
+              try {
+                final order = await svc.optimize(latlngs);
+                // 重建完整排序：固定第一與最後
+                final reordered = <Place>[
+                  places.first,
+                  for (final idx in order) places[idx],
+                  places.last,
+                ];
+                await repo.reorderPlaces(widget.tripId, reordered);
+              } catch (e) {
+                ScaffoldMessenger.of(context)
+                    .showSnackBar(SnackBar(content: Text('$e')));
+              }
+            },
+          ),
+        ],
+      ),
       body: placesAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text(e.toString())),
@@ -37,47 +79,90 @@ class _TripPageState extends ConsumerState<TripPage> {
           final markers = _buildMarkers(places);
           _fitBounds(markers);
 
-          return GoogleMap(
-            initialCameraPosition: _initPos,
-            markers: markers,
-            onMapCreated: (c) => _map = c,
-            myLocationButtonEnabled: false,
+          return Row(
+            children: [
+              // 地圖
+              Expanded(
+                flex: 2,
+                child: GoogleMap(
+                  initialCameraPosition: _initPos,
+                  markers: markers,
+                  onMapCreated: (c) => _map = c,
+                  myLocationButtonEnabled: false,
+                ),
+              ),
+              // 右側拖曳清單
+              Expanded(
+                flex: 1,
+                child: Column(
+                  children: [
+                    Expanded(
+                      child: ReorderableColumn(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        onReorder: (oldIdx, newIdx) async {
+                          final reordered = [...places];
+                          final item = reordered.removeAt(oldIdx);
+                          reordered.insert(newIdx, item);
+                          await repo.reorderPlaces(widget.tripId, reordered);
+                        },
+                        children: [
+                          for (final p in places)
+                            ListTile(
+                              key: ValueKey(p.id),
+                              title: Text(p.name),
+                              subtitle: Text(
+                                '${p.lat.toStringAsFixed(4)}, ${p.lng.toStringAsFixed(4)}',
+                              ),
+                              trailing: IconButton(
+                                icon: const Icon(Icons.delete_outline),
+                                onPressed: () =>
+                                    repo.deletePlace(widget.tripId, p.id),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.all(8),
+                      child: ElevatedButton.icon(
+                        onPressed: () => _addPlaceDialog(context, repo),
+                        icon: const Icon(Icons.add),
+                        label: const Text('新增景點'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           );
         },
       ),
-
-      /// —— 新增 FloatingActionButton：「＋」搜尋景點並加入 —— ///
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _addPlaceDialog(context, repo),
-        child: const Icon(Icons.add),
-      ),
     );
   }
 
-  /* ---------- 下面都是私人方法 ---------- */
-
+  /// 標記清單
   Set<Marker> _buildMarkers(List<Place> places) => {
-        for (final p in places)
+        for (var i = 0; i < places.length; i++)
           Marker(
-            markerId: MarkerId(p.id),
-            position: LatLng(p.lat, p.lng),
-            infoWindow: InfoWindow(title: p.name),
+            markerId: MarkerId(places[i].id),
+            position: LatLng(places[i].lat, places[i].lng),
+            infoWindow: InfoWindow(title: '${i + 1}. ${places[i].name}'),
           )
       };
 
+  /// 自動縮放 Bounds
   void _fitBounds(Set<Marker> markers) {
     if (_map == null || markers.isEmpty) return;
-    final lat = markers.map((m) => m.position.latitude);
-    final lng = markers.map((m) => m.position.longitude);
-    final sw = LatLng(lat.reduce(min), lng.reduce(min));
-    final ne = LatLng(lat.reduce(max), lng.reduce(max));
+    final latitudes = markers.map((m) => m.position.latitude);
+    final longitudes = markers.map((m) => m.position.longitude);
+    final sw = LatLng(latitudes.reduce(min), longitudes.reduce(min));
+    final ne = LatLng(latitudes.reduce(max), longitudes.reduce(max));
     _map!.animateCamera(
-      CameraUpdate.newLatLngBounds(
-          LatLngBounds(southwest: sw, northeast: ne), 48),
+      CameraUpdate.newLatLngBounds(LatLngBounds(southwest: sw, northeast: ne), 48),
     );
   }
 
-  /// —— 對話框：輸入關鍵字 → API 搜尋 → 選取加入 —— ///
+  /// 搜尋並新增景點對話框
   Future<void> _addPlaceDialog(
       BuildContext context, TripRepository repo) async {
     final query = TextEditingController();
@@ -99,23 +184,30 @@ class _TripPageState extends ConsumerState<TripPage> {
               ),
               const SizedBox(height: 8),
               ElevatedButton(
-                  onPressed: () async {
-                    final key = const String.fromEnvironment('PLACES_API_KEY');
-                    if (key.isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                          content: Text('請以 --dart-define=PLACES_API_KEY=... 執行')));
-                      return;
-                    }
-                    final svc = PlaceSearchService(key);
-                    try {
-                      results = await svc.search(query.text.trim());
-                      setState(() {}); // refresh list
-                    } catch (e) {
-                      ScaffoldMessenger.of(context)
-                          .showSnackBar(SnackBar(content: Text('$e')));
-                    }
-                  },
-                  child: const Text('搜尋')),
+                onPressed: () async {
+                  final key =
+                      const String.fromEnvironment('PLACES_API_KEY');
+                  if (key.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content:
+                            Text('請以 --dart-define=PLACES_API_KEY=... 執行'),
+                      ),
+                    );
+                    return;
+                  }
+                  try {
+                    results =
+                        await PlaceSearchService(key).search(query.text.trim());
+                  } catch (e) {
+                    results = [];
+                    ScaffoldMessenger.of(context)
+                        .showSnackBar(SnackBar(content: Text('$e')));
+                  }
+                  setState(() {});
+                },
+                child: const Text('搜尋'),
+              ),
               if (results != null)
                 SizedBox(
                   height: 240,
@@ -137,12 +229,11 @@ class _TripPageState extends ConsumerState<TripPage> {
       }),
     );
 
-    // 使用者選了一筆 → 寫入 Firestore
     if (chosen == null) return;
     await repo.addPlace(
       widget.tripId,
       Place(
-        id: '_tmp', // 讓 repository 產生隨機 docId
+        id: '_tmp',
         name: chosen!.name,
         lat: chosen!.lat,
         lng: chosen!.lng,

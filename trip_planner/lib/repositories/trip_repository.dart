@@ -59,10 +59,10 @@ class TripRepository {
 
   Future<void> deleteExpense(String tripId, String expId) =>
       _db.doc('trips/$tripId/expenses/$expId').delete();
-  Future<void> reorderPlaces(String tripId, List<Place> inOrder) async {
+    Future<void> reorderPlaces(String tripId, List<Place> ordered) async {
     final batch = _db.batch();
-    for (var i = 0; i < inOrder.length; i++) {
-      final ref = _db.doc('trips/$tripId/places/${inOrder[i].id}');
+    for (var i = 0; i < ordered.length; i++) {
+      final ref = _db.doc('trips/$tripId/places/${ordered[i].id}');
       batch.update(ref, {'order': i});
     }
     await batch.commit();
@@ -75,4 +75,5 @@ class TripRepository {
       'id': doc.id, // 寫回自動產生的 id
     });
   }
+  
 }
