@@ -1,40 +1,39 @@
-/// Expense — 分帳花費
+// 在最上方加入 Firestore import
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class Expense {
   final String id;
-  final String description;
-  final String payer; // uid
-  final double total;
-  final Map<String, double> participants; // { uid: share }
-  final bool settled;
+  final String title;
+  final int cents;
+  final String payerId;
+  final List<String> sharedBy;
+  final DateTime createdAt;
 
   Expense({
     required this.id,
-    required this.description,
-    required this.payer,
-    required this.total,
-    required this.participants,
-    required this.settled,
+    required this.title,
+    required this.cents,
+    required this.payerId,
+    required this.sharedBy,
+    required this.createdAt,
   });
 
-  factory Expense.fromJson(Map<String, dynamic> json, String id) => Expense(
-        id: id,
-        description: json['description'] as String,
-        payer: json['payer'] as String,
-        total: (json['total'] as num).toDouble(),
-        participants: Map<String, double>.from(
-          (json['participants'] as Map? ?? {}),
-        ),
-        settled: json['settled'] as bool? ?? false,
-      );
-
   Map<String, dynamic> toJson() => {
-        'description': description,
-        'payer': payer,
-        'total': total,
-        'participants': participants,
-        'settled': settled,
-        'createdAt': FieldValue.serverTimestamp(),
+        'id': id,
+        'title': title,
+        'cents': cents,
+        'payerId': payerId,
+        'sharedBy': sharedBy,
+        'createdAt': createdAt,
       };
+
+  factory Expense.fromJson(Map<String, dynamic> j) => Expense(
+        id: j['id'] as String,
+        title: j['title'] as String,
+        cents: j['cents'] as int,
+        payerId: j['payerId'] as String,
+        sharedBy: List<String>.from(j['sharedBy'] as List),
+        // 正確使用 Timestamp 轉 DateTime
+        createdAt: (j['createdAt'] as Timestamp).toDate(),
+      );
 }

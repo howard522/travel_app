@@ -42,14 +42,18 @@ class TripRepository {
       _db.doc('trips/$tripId/places/$placeId').delete();
 
   /// ------------- Expense -------------
-  Stream<List<Expense>> watchExpenses(String tripId) => _db
-      .collection('trips/$tripId/expenses')
-      .orderBy('createdAt')
-      .snapshots()
-      .map((s) => s.docs.map((d) => Expense.fromJson(d.data(), d.id)).toList());
+  Stream<List<Expense>> watchExpenses(String tripId) {
+    return _db
+        .collection('trips/$tripId/expenses')
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((s) => s.docs.map((d) => Expense.fromJson(d.data())).toList());
+  }
 
-  Future<void> addExpense(String tripId, Expense e) =>
-      _db.collection('trips/$tripId/expenses').add(e.toJson());
+  Future<void> addExpense(String tripId, Expense e) async {
+    final doc = _db.collection('trips/$tripId/expenses').doc();
+    await doc.set({...e.toJson(), 'id': doc.id});
+  }
 
   Future<void> updateExpense(
     String tripId,
@@ -59,7 +63,7 @@ class TripRepository {
 
   Future<void> deleteExpense(String tripId, String expId) =>
       _db.doc('trips/$tripId/expenses/$expId').delete();
-    Future<void> reorderPlaces(String tripId, List<Place> ordered) async {
+  Future<void> reorderPlaces(String tripId, List<Place> ordered) async {
     final batch = _db.batch();
     for (var i = 0; i < ordered.length; i++) {
       final ref = _db.doc('trips/$tripId/places/${ordered[i].id}');
@@ -75,5 +79,9 @@ class TripRepository {
       'id': doc.id, // 寫回自動產生的 id
     });
   }
-  
+    Stream<Trip> watchTrip(String id) => _db
+      .doc('trips/$id')
+      .snapshots()
+      .map((d) => Trip.fromJson(d.data()!, d.id));   // ← 傳兩個參數
+
 }
