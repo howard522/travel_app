@@ -5,7 +5,6 @@ import 'package:intl/intl.dart';
 import '../models/expense.dart';
 import '../providers/expense_providers.dart';
 import '../providers/trip_providers.dart';
-import '../repositories/trip_repository.dart';
 import 'add_expense_dialog.dart';                    // 👈 新增
 
 class ExpensePage extends ConsumerWidget {

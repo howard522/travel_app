@@ -1,18 +1,16 @@
-// lib/pages/trip_page.dart
-
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:reorderables/reorderables.dart';
+import 'package:go_router/go_router.dart';
 
 import '../providers/place_providers.dart';
 import '../providers/trip_providers.dart';
 import '../repositories/trip_repository.dart';
 import '../models/place.dart';
 import '../services/place_search_service.dart';
-import '../services/schedule_service.dart';
-import 'expense_page.dart';
+import 'add_invite_dialog.dart';
 
 class TripPage extends ConsumerStatefulWidget {
   const TripPage({super.key, required this.tripId});
@@ -23,6 +21,7 @@ class TripPage extends ConsumerStatefulWidget {
 }
 
 class _TripPageState extends ConsumerState<TripPage> {
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
   GoogleMapController? _map;
   static const _initPos =
       CameraPosition(target: LatLng(23.5, 121), zoom: 6.5);
@@ -30,129 +29,152 @@ class _TripPageState extends ConsumerState<TripPage> {
   @override
   Widget build(BuildContext context) {
     final placesAsync = ref.watch(placesOfTripProvider(widget.tripId));
+    final pendingAsync = ref.watch(pendingInvitesProvider(widget.tripId));
     final repo = ref.read(tripRepoProvider);
 
-    return DefaultTabController(
-      length: 2,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Trip Planner'),
-          bottom: const TabBar(
-            tabs: [
-              Tab(text: '地圖'),
-              Tab(text: '帳單'),
-            ],
+    return Scaffold(
+      key: _scaffoldKey,
+      appBar: AppBar(
+        title: const Text('Trip Planner'),
+        actions: [
+          // 打開右側側邊欄
+          IconButton(
+            icon: const Icon(Icons.menu),
+            onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
+            tooltip: '操作面板',
           ),
-          actions: [
-            IconButton(
-              tooltip: '智慧最佳化路線',
-              icon: const Icon(Icons.flash_on_outlined),
-              onPressed: () async {
-                final places = placesAsync.valueOrNull;
-                if (places == null || places.length < 3) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('需要至少 3 個景點才能最佳化')),
-                  );
-                  return;
-                }
-                final apiKey = const String.fromEnvironment('ROUTES_API_KEY');
-                if (apiKey.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('請以 --dart-define=ROUTES_API_KEY=... 執行')),
-                  );
-                  return;
-                }
-                final svc = ScheduleService(apiKey);
-                final latlngs = places.map((p) => '${p.lat},${p.lng}').toList();
-                try {
-                  final order = await svc.optimize(latlngs);
-                  final reordered = <Place>[
-                    places.first,
-                    for (final idx in order) places[idx],
-                    places.last,
-                  ];
-                  await repo.reorderPlaces(widget.tripId, reordered);
-                } catch (e) {
-                  ScaffoldMessenger.of(context)
-                      .showSnackBar(SnackBar(content: Text('$e')));
-                }
-              },
-            ),
-          ],
-        ),
-        body: TabBarView(
-          children: [
-            // 第一頁：地圖 + 拖曳清單
-            placesAsync.when(
+        ],
+      ),
+
+      // 右側側邊欄
+      endDrawer: Drawer(
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(8),
+            child: placesAsync.when(
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (e, _) => Center(child: Text(e.toString())),
-              data: (places) => _buildMapWithList(places, repo),
+              data: (places) => _buildSidePanel(context, places, pendingAsync, repo),
             ),
-            // 第二頁：帳單
-            ExpensePage(tripId: widget.tripId),
-          ],
+          ),
         ),
       ),
-    );
-  }
 
-  Widget _buildMapWithList(List<Place> places, TripRepository repo) {
-    final markers = _buildMarkers(places);
-    _fitBounds(markers);
-
-    return Row(
-      children: [
-        // 地圖
-        Expanded(
-          flex: 2,
-          child: GoogleMap(
+      // 主體只顯示地圖
+      body: placesAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => Center(child: Text(e.toString())),
+        data: (places) {
+          final markers = _buildMarkers(places);
+          _fitBounds(markers);
+          return GoogleMap(
             initialCameraPosition: _initPos,
             markers: markers,
             onMapCreated: (c) => _map = c,
             myLocationButtonEnabled: false,
-          ),
-        ),
-        // 拖曳清單 + 新增按鈕
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildSidePanel(
+    BuildContext context,
+    List<Place> places,
+    AsyncValue<List<String>> pendingAsync,
+    TripRepository repo,
+  ) {
+    return Column(
+      children: [
+        // 拖曳排序清單
         Expanded(
-          flex: 1,
-          child: Column(
+          child: ReorderableColumn(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            onReorder: (oldIdx, newIdx) async {
+              final list = [...places];
+              final item = list.removeAt(oldIdx);
+              list.insert(newIdx, item);
+              await repo.reorderPlaces(widget.tripId, list);
+            },
             children: [
-              Expanded(
-                child: ReorderableColumn(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  onReorder: (oldIdx, newIdx) async {
-                    final reordered = [...places];
-                    final item = reordered.removeAt(oldIdx);
-                    reordered.insert(newIdx, item);
-                    await repo.reorderPlaces(widget.tripId, reordered);
-                  },
-                  children: [
-                    for (final p in places)
-                      ListTile(
-                        key: ValueKey(p.id),
-                        title: Text(p.name),
-                        subtitle: Text(
-                          '${p.lat.toStringAsFixed(4)}, ${p.lng.toStringAsFixed(4)}',
-                        ),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.delete_outline),
-                          onPressed: () =>
-                              repo.deletePlace(widget.tripId, p.id),
-                        ),
-                      ),
-                  ],
+              for (final p in places)
+                ListTile(
+                  key: ValueKey(p.id),
+                  title: Text(p.name),
+                  subtitle: Text(
+                    '${p.lat.toStringAsFixed(4)}, ${p.lng.toStringAsFixed(4)}',
+                  ),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.delete_outline),
+                    onPressed: () => repo.deletePlace(widget.tripId, p.id),
+                  ),
                 ),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(8),
-                child: ElevatedButton.icon(
-                  onPressed: () => _addPlaceDialog(context, repo),
-                  icon: const Icon(Icons.add),
-                  label: const Text('新增景點'),
-                ),
-              ),
             ],
           ),
+        ),
+
+        // Pending 邀請
+        pendingAsync.when(
+          data: (invites) {
+            if (invites.isEmpty) return const SizedBox.shrink();
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    '等待接受邀請',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  SizedBox(
+                    height: 80,
+                    child: ListView(
+                      children: invites
+                          .map((e) => Text('• $e', overflow: TextOverflow.ellipsis))
+                          .toList(),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+          loading: () => const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: CircularProgressIndicator()),
+          error: (e, _) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Text(e.toString())),
+        ),
+
+        const Divider(),
+
+        // 操作按鈕
+        OverflowBar(
+          spacing: 8,
+          overflowSpacing: 8,
+          alignment: MainAxisAlignment.center,
+          children: [
+            ElevatedButton.icon(
+              onPressed: () => _addPlaceDialog(context, repo),
+              icon: const Icon(Icons.add_location_alt_outlined),
+              label: const Text('新增景點'),
+            ),
+            OutlinedButton.icon(
+              onPressed: () => showDialog(
+                context: context,
+                builder: (_) => AddInviteDialog(tripId: widget.tripId),
+              ),
+              icon: const Icon(Icons.mail_outlined),
+              label: const Text('邀請成員'),
+            ),
+            ElevatedButton.icon(
+              onPressed: () {
+                context.push('/trip/${widget.tripId}/expense');
+              },
+              icon: const Icon(Icons.receipt_long),
+              label: const Text('帳單'),
+            ),
+          ],
         ),
       ],
     );
@@ -169,17 +191,19 @@ class _TripPageState extends ConsumerState<TripPage> {
 
   void _fitBounds(Set<Marker> markers) {
     if (_map == null || markers.isEmpty) return;
-    final lats = markers.map((m) => m.position.latitude);
-    final lngs = markers.map((m) => m.position.longitude);
-    final sw = LatLng(lats.reduce(min), lngs.reduce(min));
-    final ne = LatLng(lats.reduce(max), lngs.reduce(max));
+    final latitudes = markers.map((m) => m.position.latitude);
+    final longitudes = markers.map((m) => m.position.longitude);
+    final sw = LatLng(latitudes.reduce(min), longitudes.reduce(min));
+    final ne = LatLng(latitudes.reduce(max), longitudes.reduce(max));
     _map!.animateCamera(
-      CameraUpdate.newLatLngBounds(LatLngBounds(southwest: sw, northeast: ne), 48),
+      CameraUpdate.newLatLngBounds(
+        LatLngBounds(southwest: sw, northeast: ne),
+        48,
+      ),
     );
   }
 
-  Future<void> _addPlaceDialog(
-      BuildContext context, TripRepository repo) async {
+  Future<void> _addPlaceDialog(BuildContext context, TripRepository repo) async {
     final query = TextEditingController();
     List<PlaceSuggestion>? results;
     PlaceSuggestion? chosen;
@@ -195,7 +219,7 @@ class _TripPageState extends ConsumerState<TripPage> {
               TextField(
                 controller: query,
                 decoration:
-                    const InputDecoration(hintText: '輸入關鍵字，如「台北 101」'),
+                    const InputDecoration(hintText: '輸入關鍵字'),
               ),
               const SizedBox(height: 8),
               ElevatedButton(
@@ -205,18 +229,13 @@ class _TripPageState extends ConsumerState<TripPage> {
                   if (key.isEmpty) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
-                          content: Text('請以 --dart-define=PLACES_API_KEY=... 執行')),
+                          content: Text(
+                              '請用 --dart-define=PLACES_API_KEY=...')),
                     );
                     return;
                   }
-                  try {
-                    results =
-                        await PlaceSearchService(key).search(query.text.trim());
-                  } catch (e) {
-                    results = [];
-                    ScaffoldMessenger.of(context)
-                        .showSnackBar(SnackBar(content: Text('$e')));
-                  }
+                  results =
+                      await PlaceSearchService(key).search(query.text);
                   setState(() {});
                 },
                 child: const Text('搜尋'),
@@ -243,13 +262,14 @@ class _TripPageState extends ConsumerState<TripPage> {
     );
 
     if (chosen == null) return;
+    final sel = chosen!;
     await repo.addPlace(
       widget.tripId,
       Place(
         id: '_tmp',
-        name: chosen!.name,
-        lat: chosen!.lat,
-        lng: chosen!.lng,
+        name: sel.name,
+        lat: sel.lat,
+        lng: sel.lng,
         order: DateTime.now().millisecondsSinceEpoch,
         stayHours: 1,
         note: '',

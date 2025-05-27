@@ -1,6 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/expense.dart';
-import '../repositories/trip_repository.dart';
 import 'trip_providers.dart';
 
 /* ---------------- 帳單串流 ---------------- */
