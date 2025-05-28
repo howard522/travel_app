@@ -1,3 +1,4 @@
+// lib/pages/home_page.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -21,13 +22,17 @@ class HomePage extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('My Trips'),
         actions: [
-          IconButton(onPressed: authRepo.signOut, icon: const Icon(Icons.logout))
+          IconButton(
+            icon: const Icon(Icons.person),
+            tooltip: '個人資料',
+            onPressed: () => context.push('/profile'),
+          ),
+          IconButton(onPressed: authRepo.signOut, icon: const Icon(Icons.logout)),
         ],
       ),
       body: SafeArea(
         child: Column(
           children: [
-            // ── 待接受邀請 ──
             invites.when(
               loading: () => const LinearProgressIndicator(),
               error: (e, _) => Padding(
@@ -64,8 +69,6 @@ class HomePage extends ConsumerWidget {
                       ],
                     ),
             ),
-
-            // ── 我的行程 ──
             Expanded(
               child: myTrips.when(
                 loading: () => const Center(child: CircularProgressIndicator()),
@@ -115,12 +118,12 @@ class HomePage extends ConsumerWidget {
     final repo = ref.read(tripRepoProvider);
     await repo.addTrip(
       Trip(
-        id: '_tmp',
-        title: ctrl.text.trim(),
-        members: [user.uid],
-        invites: [],              // ← 一定要帶 invites
-        startDate: DateTime.now(),
-        endDate: DateTime.now().add(const Duration(days: 1)),
+        id        : '_tmp',
+        title     : ctrl.text.trim(),
+        members   : [user.uid],
+        invites   : [],
+        startDate : DateTime.now(),
+        endDate   : DateTime.now().add(const Duration(days: 1)),
       ),
     );
   }
