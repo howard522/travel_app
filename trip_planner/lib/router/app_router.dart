@@ -10,6 +10,7 @@ import '../pages/home_page.dart';
 import '../pages/profile_page.dart';
 import '../pages/trip_page.dart';
 import '../pages/expense_page.dart';
+import '../pages/chat_page.dart';
 
 final appRouter = GoRouter(
   refreshListenable: _GoRouterRefresh(),
@@ -30,6 +31,11 @@ final appRouter = GoRouter(
               builder: (_, state) =>
                   ExpensePage(tripId: state.pathParameters['id']!),
             ),
+            GoRoute(
+      path: 'chat',
+      builder: (_, state) =>
+        ChatPage(tripId: state.pathParameters['id']!),
+    ),
           ],
         ),
       ],

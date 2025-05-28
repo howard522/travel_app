@@ -23,8 +23,7 @@ class TripPage extends ConsumerStatefulWidget {
 class _TripPageState extends ConsumerState<TripPage> {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   GoogleMapController? _map;
-  static const _initPos =
-      CameraPosition(target: LatLng(23.5, 121), zoom: 6.5);
+  static const _initPos = CameraPosition(target: LatLng(23.5, 121), zoom: 6.5);
 
   @override
   Widget build(BuildContext context) {
@@ -54,7 +53,9 @@ class _TripPageState extends ConsumerState<TripPage> {
             child: placesAsync.when(
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (e, _) => Center(child: Text(e.toString())),
-              data: (places) => _buildSidePanel(context, places, pendingAsync, repo),
+              data:
+                  (places) =>
+                      _buildSidePanel(context, places, pendingAsync, repo),
             ),
           ),
         ),
@@ -129,21 +130,31 @@ class _TripPageState extends ConsumerState<TripPage> {
                   SizedBox(
                     height: 80,
                     child: ListView(
-                      children: invites
-                          .map((e) => Text('• $e', overflow: TextOverflow.ellipsis))
-                          .toList(),
+                      children:
+                          invites
+                              .map(
+                                (e) => Text(
+                                  '• $e',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              )
+                              .toList(),
                     ),
                   ),
                 ],
               ),
             );
           },
-          loading: () => const Padding(
-              padding: EdgeInsets.symmetric(vertical: 8),
-              child: CircularProgressIndicator()),
-          error: (e, _) => Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Text(e.toString())),
+          loading:
+              () => const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: CircularProgressIndicator(),
+              ),
+          error:
+              (e, _) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Text(e.toString()),
+              ),
         ),
 
         const Divider(),
@@ -160,10 +171,11 @@ class _TripPageState extends ConsumerState<TripPage> {
               label: const Text('新增景點'),
             ),
             OutlinedButton.icon(
-              onPressed: () => showDialog(
-                context: context,
-                builder: (_) => AddInviteDialog(tripId: widget.tripId),
-              ),
+              onPressed:
+                  () => showDialog(
+                    context: context,
+                    builder: (_) => AddInviteDialog(tripId: widget.tripId),
+                  ),
               icon: const Icon(Icons.mail_outlined),
               label: const Text('邀請成員'),
             ),
@@ -174,6 +186,11 @@ class _TripPageState extends ConsumerState<TripPage> {
               icon: const Icon(Icons.receipt_long),
               label: const Text('帳單'),
             ),
+            OutlinedButton.icon(
+              onPressed: () => context.push('/trip/${widget.tripId}/chat'),
+              icon: const Icon(Icons.chat_bubble_outline),
+              label: const Text('聊天室'),
+            ),
           ],
         ),
       ],
@@ -181,13 +198,13 @@ class _TripPageState extends ConsumerState<TripPage> {
   }
 
   Set<Marker> _buildMarkers(List<Place> places) => {
-        for (var i = 0; i < places.length; i++)
-          Marker(
-            markerId: MarkerId(places[i].id),
-            position: LatLng(places[i].lat, places[i].lng),
-            infoWindow: InfoWindow(title: '${i + 1}. ${places[i].name}'),
-          )
-      };
+    for (var i = 0; i < places.length; i++)
+      Marker(
+        markerId: MarkerId(places[i].id),
+        position: LatLng(places[i].lat, places[i].lng),
+        infoWindow: InfoWindow(title: '${i + 1}. ${places[i].name}'),
+      ),
+  };
 
   void _fitBounds(Set<Marker> markers) {
     if (_map == null || markers.isEmpty) return;
@@ -203,62 +220,72 @@ class _TripPageState extends ConsumerState<TripPage> {
     );
   }
 
-  Future<void> _addPlaceDialog(BuildContext context, TripRepository repo) async {
+  Future<void> _addPlaceDialog(
+    BuildContext context,
+    TripRepository repo,
+  ) async {
     final query = TextEditingController();
     List<PlaceSuggestion>? results;
     PlaceSuggestion? chosen;
 
     await showDialog(
       context: context,
-      builder: (_) => StatefulBuilder(builder: (ctx, setState) {
-        return AlertDialog(
-          title: const Text('搜尋景點'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: query,
-                decoration:
-                    const InputDecoration(hintText: '輸入關鍵字'),
-              ),
-              const SizedBox(height: 8),
-              ElevatedButton(
-                onPressed: () async {
-                  final key =
-                      const String.fromEnvironment('PLACES_API_KEY');
-                  if (key.isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                          content: Text(
-                              '請用 --dart-define=PLACES_API_KEY=...')),
-                    );
-                    return;
-                  }
-                  results =
-                      await PlaceSearchService(key).search(query.text);
-                  setState(() {});
-                },
-                child: const Text('搜尋'),
-              ),
-              if (results != null)
-                SizedBox(
-                  height: 240,
-                  width: 300,
-                  child: ListView.builder(
-                    itemCount: results!.length,
-                    itemBuilder: (_, i) => ListTile(
-                      title: Text(results![i].name),
-                      onTap: () {
-                        chosen = results![i];
-                        Navigator.pop(ctx);
-                      },
+      builder:
+          (_) => StatefulBuilder(
+            builder: (ctx, setState) {
+              return AlertDialog(
+                title: const Text('搜尋景點'),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: query,
+                      decoration: const InputDecoration(hintText: '輸入關鍵字'),
                     ),
-                  ),
+                    const SizedBox(height: 8),
+                    ElevatedButton(
+                      onPressed: () async {
+                        final key = const String.fromEnvironment(
+                          'PLACES_API_KEY',
+                        );
+                        if (key.isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                '請用 --dart-define=PLACES_API_KEY=...',
+                              ),
+                            ),
+                          );
+                          return;
+                        }
+                        results = await PlaceSearchService(
+                          key,
+                        ).search(query.text);
+                        setState(() {});
+                      },
+                      child: const Text('搜尋'),
+                    ),
+                    if (results != null)
+                      SizedBox(
+                        height: 240,
+                        width: 300,
+                        child: ListView.builder(
+                          itemCount: results!.length,
+                          itemBuilder:
+                              (_, i) => ListTile(
+                                title: Text(results![i].name),
+                                onTap: () {
+                                  chosen = results![i];
+                                  Navigator.pop(ctx);
+                                },
+                              ),
+                        ),
+                      ),
+                  ],
                 ),
-            ],
+              );
+            },
           ),
-        );
-      }),
     );
 
     if (chosen == null) return;

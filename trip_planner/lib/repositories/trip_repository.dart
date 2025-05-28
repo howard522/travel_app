@@ -3,7 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/trip.dart';
 import '../models/place.dart';
 import '../models/expense.dart';
-
+import '../models/chat_message.dart';
 class TripRepository {
   final _db = FirebaseFirestore.instance;
 
@@ -113,4 +113,25 @@ class TripRepository {
 
   Future<void> deleteExpense(String tripId, String expId) =>
       _db.doc('trips/$tripId/expenses/$expId').delete();
+      /// 監聽聊天室訊息（按時間排序）
+  Stream<List<ChatMessage>> watchMessages(String tripId) =>
+      _db
+        .collection('trips/$tripId/messages')
+        .orderBy('createdAt')
+        .snapshots()
+        .map((snap) =>
+          snap.docs
+              .map((d) => ChatMessage.fromJson(d.data()))
+              .toList()
+        );
+
+  /// 傳送一則訊息
+  Future<void> sendMessage(String tripId, ChatMessage msg) async {
+    final doc = _db.collection('trips/$tripId/messages').doc();
+    await doc.set({
+      ...msg.toJson(),
+      'id': doc.id,
+    });
+  }
+
 }
