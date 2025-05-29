@@ -1,5 +1,4 @@
 // lib/pages/trip_page.dart
-
 import 'dart:async';
 import 'dart:math';
 
@@ -62,7 +61,8 @@ class _TripPageState extends ConsumerState<TripPage> {
             child: placesAsync.when(
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (e, _) => Center(child: Text('Error: $e')),
-              data: (places) => _buildSidePanel(context, places, pendingAsync, repo),
+              data: (places) =>
+                  _buildSidePanel(context, places, pendingAsync, repo),
             ),
           ),
         ),
@@ -79,10 +79,69 @@ class _TripPageState extends ConsumerState<TripPage> {
             polylines: _polylines,
             onMapCreated: (c) => _map = c,
             myLocationButtonEnabled: false,
+            onTap: _handleMapTap, // Day2: 任意點擊地圖加入自訂景點
           );
         },
       ),
     );
+  }
+
+  /// Day2: 點地圖任意位置，彈出文字框輸入景點名稱後加入
+  Future<void> _handleMapTap(LatLng pos) async {
+    final nameCtrl = TextEditingController();
+    final ok = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => Padding(
+        padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom),
+        child: Wrap(
+          children: [
+            const ListTile(title: Text('新增自訂景點')),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Column(
+                children: [
+                  TextField(
+                    controller: nameCtrl,
+                    decoration:
+                        const InputDecoration(labelText: '景點名稱'),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, false),
+                        child: const Text('取消'),
+                      ),
+                      ElevatedButton(
+                        onPressed: () => Navigator.pop(context, true),
+                        child: const Text('加入景點'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (ok == true && nameCtrl.text.trim().isNotEmpty) {
+      await ref.read(tripRepoProvider).addPlace(
+        widget.tripId,
+        Place(
+          id: '_tmp',
+          name: nameCtrl.text.trim(),
+          lat: pos.latitude,
+          lng: pos.longitude,
+          order: DateTime.now().millisecondsSinceEpoch,
+          stayHours: 1,
+          note: '',
+        ),
+      );
+    }
   }
 
   Widget _buildSidePanel(
@@ -91,16 +150,19 @@ class _TripPageState extends ConsumerState<TripPage> {
     AsyncValue<List<String>> pendingAsync,
     TripRepository repo,
   ) {
+    // 保留 Day1 side panel 原始實作
     if (_modes.length != max(0, places.length - 1)) {
       _modes = List.filled(max(0, places.length - 1), 'driving');
     }
-
     final departureTimes = <DateTime>[];
     var now = DateTime.now();
     departureTimes.add(now);
     for (var i = 0; i < places.length - 1; i++) {
-      final durMin = int.tryParse(_durationsMap[places[i + 1].id] ?? '0') ?? 0;
-      now = now.add(Duration(minutes: durMin)).add(Duration(hours: places[i].stayHours));
+      final durMin =
+          int.tryParse(_durationsMap[places[i + 1].id] ?? '0') ?? 0;
+      now = now
+          .add(Duration(minutes: durMin))
+          .add(Duration(hours: places[i].stayHours));
       departureTimes.add(now);
     }
 
@@ -124,7 +186,8 @@ class _TripPageState extends ConsumerState<TripPage> {
                       '離開時間: ${DateFormat('HH:mm').format(departureTimes[i])}'),
                   trailing: IconButton(
                     icon: const Icon(Icons.delete_outline),
-                    onPressed: () => repo.deletePlace(widget.tripId, places[i].id),
+                    onPressed: () =>
+                        repo.deletePlace(widget.tripId, places[i].id),
                   ),
                 ),
             ],
@@ -147,10 +210,13 @@ class _TripPageState extends ConsumerState<TripPage> {
                     DropdownButton<String>(
                       value: _modes[i],
                       items: const [
-                        DropdownMenuItem(value: 'driving', child: Text('開車')),
-                        DropdownMenuItem(value: 'walking', child: Text('走路')),
+                        DropdownMenuItem(
+                            value: 'driving', child: Text('開車')),
+                        DropdownMenuItem(
+                            value: 'walking', child: Text('走路')),
                         DropdownMenuItem(value: 'bus', child: Text('公車')),
-                        DropdownMenuItem(value: 'subway', child: Text('捷運')),
+                        DropdownMenuItem(
+                            value: 'subway', child: Text('捷運')),
                       ],
                       onChanged: (v) => setState(() => _modes[i] = v!),
                     ),
@@ -171,11 +237,13 @@ class _TripPageState extends ConsumerState<TripPage> {
               padding: const EdgeInsets.symmetric(vertical: 8),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: invites.map((e) => Text('• $e')).toList(),
+                children:
+                    invites.map((e) => Text('• $e')).toList(),
               ),
             );
           },
-          loading: () => const CircularProgressIndicator(),
+          loading: () =>
+              const Center(child: CircularProgressIndicator()),
           error: (e, _) => Text('Error: $e'),
         ),
         const Divider(),
@@ -185,25 +253,29 @@ class _TripPageState extends ConsumerState<TripPage> {
           alignment: MainAxisAlignment.center,
           children: [
             ElevatedButton.icon(
-              onPressed: () => _addPlaceDialog(context, ref.read(tripRepoProvider)),
+              onPressed: () =>
+                  _addPlaceDialog(context, ref.read(tripRepoProvider)),
               icon: const Icon(Icons.add_location_alt_outlined),
               label: const Text('新增景點'),
             ),
             OutlinedButton.icon(
               onPressed: () => showDialog(
                 context: context,
-                builder: (_) => AddInviteDialog(tripId: widget.tripId),
+                builder: (_) =>
+                    AddInviteDialog(tripId: widget.tripId),
               ),
               icon: const Icon(Icons.mail_outlined),
               label: const Text('邀請成員'),
             ),
             ElevatedButton.icon(
-              onPressed: () => context.push('/trip/${widget.tripId}/expense'),
+              onPressed: () =>
+                  context.push('/trip/${widget.tripId}/expense'),
               icon: const Icon(Icons.receipt_long),
               label: const Text('帳單'),
             ),
             OutlinedButton.icon(
-              onPressed: () => context.push('/trip/${widget.tripId}/chat'),
+              onPressed: () =>
+                  context.push('/trip/${widget.tripId}/chat'),
               icon: const Icon(Icons.chat_bubble_outline),
               label: const Text('聊天室'),
             ),
@@ -243,16 +315,18 @@ class _TripPageState extends ConsumerState<TripPage> {
       };
       _durationsMap = {
         for (var i = 0; i < segments.length; i++)
-          places[i + 1].id: (segments[i].duration / 60).round().toString(),
+          places[i + 1].id:
+              (segments[i].duration / 60).round().toString(),
       };
     });
   }
 
-  Future<void> _addPlaceDialog(BuildContext context, TripRepository repo) async {
+  Future<void> _addPlaceDialog(
+      BuildContext context, TripRepository repo) async {
     final query = TextEditingController();
     List<PlaceSuggestion>? results;
     PlaceSuggestion? chosen;
-    await showDialog(
+    await showDialog<PlaceSuggestion?>(
       context: context,
       builder: (_) => StatefulBuilder(
         builder: (ctx, setState) => AlertDialog(
@@ -262,21 +336,23 @@ class _TripPageState extends ConsumerState<TripPage> {
             children: [
               TextField(
                 controller: query,
-                decoration: const InputDecoration(hintText: '輸入關鍵字'),
+                decoration:
+                    const InputDecoration(hintText: '輸入關鍵字'),
               ),
               const SizedBox(height: 8),
               ElevatedButton(
                 onPressed: () async {
-                  final key = const String.fromEnvironment('PLACES_API_KEY');
+                  final key =
+                      const String.fromEnvironment('PLACES_API_KEY');
                   if (key.isEmpty) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
-                        content: Text('請設定 PLACES_API_KEY'),
-                      ),
+                          content: Text('請設定 PLACES_API_KEY')),
                     );
                     return;
                   }
-                  results = await PlaceSearchService(key).search(query.text);
+                  results = await PlaceSearchService(key)
+                      .search(query.text);
                   setState(() {});
                 },
                 child: const Text('搜尋'),
@@ -291,7 +367,7 @@ class _TripPageState extends ConsumerState<TripPage> {
                       title: Text(results![i].name),
                       onTap: () {
                         chosen = results![i];
-                        Navigator.pop(ctx);
+                        Navigator.pop(ctx, chosen);
                       },
                     ),
                   ),
@@ -322,7 +398,8 @@ class _TripPageState extends ConsumerState<TripPage> {
           Marker(
             markerId: MarkerId(places[i].id),
             position: LatLng(places[i].lat, places[i].lng),
-            infoWindow: InfoWindow(title: '${i + 1}. ${places[i].name}'),
+            infoWindow:
+                InfoWindow(title: '${i + 1}. ${places[i].name}'),
           ),
       };
 
