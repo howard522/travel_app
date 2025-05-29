@@ -1,15 +1,15 @@
 // lib/pages/chat_page.dart
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_keyboard_visibility/flutter_keyboard_visibility.dart';
 
+import '../models/chat_message.dart';
 import '../providers/chat_providers.dart';
 import '../providers/auth_providers.dart';
 import '../providers/profile_providers.dart';
 
 class ChatPage extends ConsumerStatefulWidget {
-  const ChatPage({super.key, required this.tripId});
+  const ChatPage({Key? key, required this.tripId}) : super(key: key);
   final String tripId;
 
   @override
@@ -60,8 +60,6 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                     final m = list[i];
                     final isMe = m.senderId ==
                         ref.read(authStateProvider).value?.uid;
-
-                    // 監聽此 senderId 的 Profile
                     final profileAsync =
                         ref.watch(userProfileProviderFamily(m.senderId));
 
@@ -70,20 +68,27 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                         senderName: m.senderId,
                         text: m.text,
                         isMe: isMe,
+                        avatarUrl: null,
                       ),
                       error: (_, __) => _buildMessageBubble(
                         senderName: m.senderId,
                         text: m.text,
                         isMe: isMe,
+                        avatarUrl: null,
                       ),
                       data: (profile) {
-                        final name = profile?.displayName.isNotEmpty == true
+                        final name = (profile?.displayName.isNotEmpty == true)
                             ? profile!.displayName
                             : m.senderId;
+                        final avatarUrl =
+                            profile?.photoURL.isNotEmpty == true
+                                ? profile!.photoURL
+                                : null;
                         return _buildMessageBubble(
                           senderName: name,
                           text: m.text,
                           isMe: isMe,
+                          avatarUrl: avatarUrl,
                         );
                       },
                     );
@@ -124,39 +129,63 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     required String senderName,
     required String text,
     required bool isMe,
+    String? avatarUrl,
   }) {
-    return Column(
-      crossAxisAlignment:
-          isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 8),
-          child: Text(
-            senderName,
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.grey[600],
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment:
+            isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (!isMe) _buildAvatar(avatarUrl),
+          if (!isMe) const SizedBox(width: 8),
+          Flexible(
+            child: Column(
+              crossAxisAlignment:
+                  isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+              children: [
+                Text(
+                  senderName,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[600],
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Container(
+                  margin: const EdgeInsets.only(top: 2),
+                  padding: const EdgeInsets.all(12),
+                  constraints: BoxConstraints(
+                    maxWidth: MediaQuery.of(context).size.width * 0.7,
+                  ),
+                  decoration: BoxDecoration(
+                    color: isMe
+                        ? Theme.of(context)
+                            .colorScheme
+                            .primaryContainer
+                        : Theme.of(context)
+                            .colorScheme
+                            .surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(text),
+                ),
+              ],
             ),
           ),
-        ),
-        Align(
-          alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-          child: Container(
-            margin: const EdgeInsets.symmetric(vertical: 4),
-            padding: const EdgeInsets.all(12),
-            constraints: BoxConstraints(
-              maxWidth: MediaQuery.of(context).size.width * 0.7,
-            ),
-            decoration: BoxDecoration(
-              color: isMe
-                  ? Theme.of(context).colorScheme.primaryContainer
-                  : Theme.of(context).colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(text),
-          ),
-        ),
-      ],
+          if (isMe) const SizedBox(width: 8),
+          if (isMe) _buildAvatar(avatarUrl),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAvatar(String? url) {
+    return CircleAvatar(
+      radius: 16,
+      backgroundImage: (url != null) ? NetworkImage(url) : null,
+      child: (url == null) ? const Icon(Icons.person, size: 16) : null,
     );
   }
 }
