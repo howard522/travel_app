@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
 import '../providers/auth_providers.dart';
 import '../providers/trip_providers.dart';
@@ -54,7 +55,8 @@ class HomePage extends ConsumerWidget {
                           ListTile(
                             title: Text(t.title),
                             subtitle: Text(
-                              t.startDate.toLocal().toString().split(' ').first,
+                              DateFormat('yyyy-MM-dd HH:mm')
+                                  .format(t.startTime.toLocal()),
                             ),
                             trailing: ElevatedButton(
                               onPressed: () => tripRepo.acceptInvite(
@@ -91,16 +93,47 @@ class HomePage extends ConsumerWidget {
     );
   }
 
-  Future<void> _showNewTripDialog(
-      BuildContext context, WidgetRef ref) async {
-    final ctrl = TextEditingController();
+  /* ---------- 新增 Trip Dialog ---------- */
+
+  Future<void> _showNewTripDialog(BuildContext context, WidgetRef ref) async {
+    final titleCtrl = TextEditingController();
+    DateTime startAt = DateTime.now();
+
     final ok = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('New Trip'),
-        content: TextField(
-          controller: ctrl,
-          decoration: const InputDecoration(hintText: 'Trip title'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: titleCtrl,
+              decoration: const InputDecoration(hintText: 'Trip title'),
+            ),
+            const SizedBox(height: 16),
+            ListTile(
+              title: Text('Start: ${DateFormat('yyyy-MM-dd HH:mm').format(startAt)}'),
+              trailing: const Icon(Icons.edit_calendar_outlined),
+              onTap: () async {
+                final date = await showDatePicker(
+                  context: context,
+                  initialDate: startAt,
+                  firstDate: DateTime(2020),
+                  lastDate: DateTime(2100),
+                );
+                if (date == null) return;
+                final time = await showTimePicker(
+                  context: context,
+                  initialTime: TimeOfDay.fromDateTime(startAt),
+                );
+                if (time == null) return;
+                startAt = DateTime(date.year, date.month, date.day,
+                    time.hour, time.minute);
+                // rebuild dialog
+                (context as Element).markNeedsBuild();
+              },
+            ),
+          ],
         ),
         actions: [
           TextButton(
@@ -112,18 +145,20 @@ class HomePage extends ConsumerWidget {
         ],
       ),
     );
-    if (ok != true || ctrl.text.trim().isEmpty) return;
+
+    if (ok != true || titleCtrl.text.trim().isEmpty) return;
 
     final user = ref.read(authStateProvider).value!;
     final repo = ref.read(tripRepoProvider);
+
     await repo.addTrip(
       Trip(
         id        : '_tmp',
-        title     : ctrl.text.trim(),
+        title     : titleCtrl.text.trim(),
         members   : [user.uid],
         invites   : [],
-        startDate : DateTime.now(),
-        endDate   : DateTime.now().add(const Duration(days: 1)),
+        startTime : startAt,
+        endDate   : startAt.add(const Duration(days: 1)),
       ),
     );
   }
@@ -137,10 +172,8 @@ class _TripTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListTile(
       title: Text(trip.title),
-      subtitle: Text(
-        '${trip.startDate.toLocal().toString().split(' ').first}'
-        ' ➜ ${trip.endDate.toLocal().toString().split(' ').first}',
-      ),
+      subtitle:
+          Text(DateFormat('yyyy-MM-dd HH:mm').format(trip.startTime.toLocal())),
       trailing: const Icon(Icons.chevron_right),
       onTap: () => context.push('/trip/${trip.id}'),
     );

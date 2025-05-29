@@ -1,32 +1,35 @@
-/// TripRepository — 封裝所有 Trip/Place/Expense 的 CRUD 與 Stream
+// lib/repositories/trip_repository.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/trip.dart';
 import '../models/place.dart';
 import '../models/expense.dart';
 import '../models/chat_message.dart';
+
 class TripRepository {
   final _db = FirebaseFirestore.instance;
 
   /* ──────────────── Trip ──────────────── */
 
-  /// 取得自己是 member 的行程（後端排序）
+  /// 取得自己是 member 的行程（以 startTime 排序）
   Stream<List<Trip>> watchTrips(String uid) => _db
       .collection('trips')
       .where('members', arrayContains: uid)
-      .orderBy('startDate')
+      .orderBy('startTime')
       .snapshots()
       .map((s) =>
           s.docs.map((d) => Trip.fromJson(d.data(), d.id)).toList());
 
-  /// 取得自己被邀請（invites arrayContains）的行程（前端排序）
+  /// 取得自己被邀請的行程（以 startTime 排序）
   Stream<List<Trip>> watchTripsByInvite(String email) => _db
       .collection('trips')
       .where('invites', arrayContains: email)
+      .orderBy('startTime')
       .snapshots()
       .map((s) {
         final list =
             s.docs.map((d) => Trip.fromJson(d.data(), d.id)).toList();
-        list.sort((a, b) => a.startDate.compareTo(b.startDate));
+        // 前端再次保證排序
+        list.sort((a, b) => a.startTime.compareTo(b.startTime));
         return list;
       });
 
@@ -45,7 +48,6 @@ class TripRepository {
 
   /* ──────────────── Invite ──────────────── */
 
-  /// 發送邀請：把 email 加到 invites array
   Future<void> sendInvite(String tripId, String email) {
     final tripRef = _db.doc('trips/$tripId');
     return tripRef.update({
@@ -53,7 +55,6 @@ class TripRepository {
     });
   }
 
-  /// 接受邀請：從 invites 移除、把 uid 加到 members
   Future<void> acceptInvite(
       String tripId, String uid, String email) async {
     final tripRef = _db.doc('trips/$tripId');
@@ -113,19 +114,18 @@ class TripRepository {
 
   Future<void> deleteExpense(String tripId, String expId) =>
       _db.doc('trips/$tripId/expenses/$expId').delete();
-      /// 監聽聊天室訊息（按時間排序）
+
+  /* ──────────────── Chat ──────────────── */
+
   Stream<List<ChatMessage>> watchMessages(String tripId) =>
       _db
         .collection('trips/$tripId/messages')
         .orderBy('createdAt')
         .snapshots()
         .map((snap) =>
-          snap.docs
-              .map((d) => ChatMessage.fromJson(d.data()))
-              .toList()
+          snap.docs.map((d) => ChatMessage.fromJson(d.data())).toList()
         );
 
-  /// 傳送一則訊息
   Future<void> sendMessage(String tripId, ChatMessage msg) async {
     final doc = _db.collection('trips/$tripId/messages').doc();
     await doc.set({
@@ -133,5 +133,4 @@ class TripRepository {
       'id': doc.id,
     });
   }
-
 }
