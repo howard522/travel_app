@@ -66,6 +66,7 @@ dependencies:
   flutter_polyline_points: ^2.1.0
   google_fonts: ^6.2.1
   animations: ^2.0.11
+  shimmer: ^3.0.0
 
 dev_dependencies:
   flutter_test:
