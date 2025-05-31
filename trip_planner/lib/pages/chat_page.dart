@@ -1,4 +1,5 @@
 // lib/pages/chat_page.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_keyboard_visibility/flutter_keyboard_visibility.dart';
@@ -65,13 +66,13 @@ class _ChatPageState extends ConsumerState<ChatPage> {
 
                     return profileAsync.when(
                       loading: () => _buildMessageBubble(
-                        senderName: m.senderId,
+                        senderName: '使用者', // 讀取中先顯示「使用者」
                         text: m.text,
                         isMe: isMe,
                         avatarUrl: null,
                       ),
                       error: (_, __) => _buildMessageBubble(
-                        senderName: m.senderId,
+                        senderName: '使用者', // 發生錯誤也顯示「使用者」
                         text: m.text,
                         isMe: isMe,
                         avatarUrl: null,
@@ -79,7 +80,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                       data: (profile) {
                         final name = (profile?.displayName.isNotEmpty == true)
                             ? profile!.displayName
-                            : m.senderId;
+                            : '使用者';
                         final avatarUrl =
                             profile?.photoURL.isNotEmpty == true
                                 ? profile!.photoURL
@@ -161,12 +162,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                   ),
                   decoration: BoxDecoration(
                     color: isMe
-                        ? Theme.of(context)
-                            .colorScheme
-                            .primaryContainer
-                        : Theme.of(context)
-                            .colorScheme
-                            .surfaceContainerHighest,
+                        ? Theme.of(context).colorScheme.primaryContainer
+                        : Theme.of(context).colorScheme.surfaceContainerHighest,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(text),

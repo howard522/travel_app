@@ -1,4 +1,5 @@
 // lib/pages/sign_in_page.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_signin_button/flutter_signin_button.dart';
@@ -18,26 +19,24 @@ class _SignInPageState extends ConsumerState<SignInPage> {
   final _email = TextEditingController();
   final _pwd = TextEditingController();
   bool _isRegister = false;
-  String? _err;
 
   @override
   Widget build(BuildContext context) {
-    // 监听当前登录状态
     final authState = ref.watch(authStateProvider);
 
     return authState.when(
       data: (user) {
-        // 如果已经登录，则跳回首页
         if (user != null) {
+          // 已登入，直接跳到首頁
           WidgetsBinding.instance.addPostFrameCallback((_) {
             context.go('/');
           });
+          // 仍顯示 Loading
           return const Scaffold(
             body: Center(child: CircularProgressIndicator()),
           );
         }
 
-        // 未登录：展示登录/注册表单
         final authRepo = ref.read(authRepoProvider);
 
         return Scaffold(
@@ -48,10 +47,6 @@ class _SignInPageState extends ConsumerState<SignInPage> {
               key: _formKey,
               child: Column(
                 children: [
-                  if (_err != null) ...[
-                    Text(_err!, style: const TextStyle(color: Colors.red)),
-                    const SizedBox(height: 8),
-                  ],
                   TextFormField(
                     controller: _email,
                     decoration: const InputDecoration(labelText: 'Email'),
@@ -63,7 +58,7 @@ class _SignInPageState extends ConsumerState<SignInPage> {
                     decoration: const InputDecoration(labelText: 'Password'),
                     obscureText: true,
                     validator: (v) =>
-                        v != null && v.length >= 6 ? null : '≥ 6 chars',
+                        v != null && v.length >= 6 ? null : '至少 6 字元',
                   ),
                   const SizedBox(height: 16),
                   ElevatedButton(
@@ -82,16 +77,21 @@ class _SignInPageState extends ConsumerState<SignInPage> {
                           );
                         }
                       } catch (e) {
-                        setState(() => _err = e.toString());
+                        // 將錯誤訊息以 SnackBar 顯示
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('登入失敗：${e.toString()}')),
+                        );
                       }
                     },
                     child: Text(_isRegister ? 'Register' : 'Sign in'),
                   ),
                   TextButton(
                     onPressed: () => setState(() => _isRegister = !_isRegister),
-                    child: Text(_isRegister
-                        ? 'Already have account? Sign in'
-                        : 'No account? Register'),
+                    child: Text(
+                      _isRegister
+                          ? 'Already have account? Sign in'
+                          : 'No account? Register',
+                    ),
                   ),
                   const SizedBox(height: 16),
                   SignInButton(
@@ -100,7 +100,9 @@ class _SignInPageState extends ConsumerState<SignInPage> {
                       try {
                         await authRepo.signInWithGoogle();
                       } catch (e) {
-                        setState(() => _err = e.toString());
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Google 登入失敗：${e.toString()}')),
+                        );
                       }
                     },
                   ),

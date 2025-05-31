@@ -1,11 +1,12 @@
 // lib/providers/auth_providers.dart
+
 import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:google_sign_in/google_sign_in.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:google_sign_in/google_sign_in.dart';  
 
 final firebaseAuthProvider =
     Provider<FirebaseAuth>((_) => FirebaseAuth.instance);
@@ -32,7 +33,7 @@ class AuthRepository {
   final FirebaseFirestore _firestore;
   final FirebaseStorage _storage;
 
-  /// 如果 Firestore 裡沒有此 UID，則建立一筆預設 user doc
+  /// 如果 Firestore 裡沒有此 UID，就建立一筆預設的 user doc (含 gender, country)
   Future<void> _ensureUserDocExists(User user) async {
     final docRef = _firestore.collection('users').doc(user.uid);
     final snap = await docRef.get();
@@ -43,6 +44,8 @@ class AuthRepository {
         'photoURL'   : user.photoURL ?? '',
         'bio'        : '',
         'phone'      : '',
+        'gender'     : '', // 預設空白
+        'country'    : '', // 預設空白
       });
     }
   }
@@ -70,6 +73,7 @@ class AuthRepository {
   }
 
   Future<UserCredential> signInWithGoogle() async {
+    // … (與原本相同) …
     final gUser = await GoogleSignIn().signIn();
     if (gUser == null) throw Exception('Google sign-in aborted');
     final gAuth = await gUser.authentication;
@@ -86,10 +90,13 @@ class AuthRepository {
   Future<void> signOut() => _auth.signOut();
 
   /// 更新使用者在 Firestore 上的 profile 欄位，並同步更新 FirebaseAuth
+  /// 目前新增 gender, country 更新
   Future<void> updateUserProfile({
     String? displayName,
     String? bio,
     String? phone,
+    String? gender,
+    String? country,
   }) async {
     final user = _auth.currentUser!;
     final updates = <String, dynamic>{};
@@ -103,12 +110,18 @@ class AuthRepository {
     if (phone != null) {
       updates['phone'] = phone;
     }
+    if (gender != null) {
+      updates['gender'] = gender;
+    }
+    if (country != null) {
+      updates['country'] = country;
+    }
     if (updates.isNotEmpty) {
       await _firestore.collection('users').doc(user.uid).update(updates);
     }
   }
 
-  /// 上傳頭像到 Firebase Storage，更新 photoURL
+  /// 上傳頭像到 Firebase Storage，並同步更新 photoURL
   Future<String> uploadAvatar(File file) async {
     final user = _auth.currentUser!;
     final ref = _storage.ref('avatars/${user.uid}');

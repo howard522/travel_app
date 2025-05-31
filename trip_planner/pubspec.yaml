@@ -64,6 +64,8 @@ dependencies:
   firebase_storage: ^12.4.6
   flutter_keyboard_visibility: ^6.0.0
   flutter_polyline_points: ^2.1.0
+  google_fonts: ^6.2.1
+  animations: ^2.0.11
 
 dev_dependencies:
   flutter_test:

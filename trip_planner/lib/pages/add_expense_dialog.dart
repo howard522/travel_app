@@ -1,7 +1,10 @@
+// lib/pages/add_expense_dialog.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/expense.dart';
+import '../providers/profile_providers.dart';
 
 class AddExpenseDialog extends ConsumerStatefulWidget {
   const AddExpenseDialog({
@@ -23,8 +26,8 @@ class _AddExpenseDialogState extends ConsumerState<AddExpenseDialog> {
   final _title = TextEditingController();
   final _money = TextEditingController();
 
-  late String _payer;         // 單選
-  late Set<String> _sharedBy; // 多選
+  late String _payer; // UID
+  late Set<String> _sharedBy; // UID 列表
 
   @override
   void initState() {
@@ -44,7 +47,6 @@ class _AddExpenseDialogState extends ConsumerState<AddExpenseDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       title: const Text('新增帳單'),
-      // ---- 關鍵：限制寬度並允許內容垂直捲動 ----
       content: SizedBox(
         width: 320,
         child: SingleChildScrollView(
@@ -73,7 +75,7 @@ class _AddExpenseDialogState extends ConsumerState<AddExpenseDialog> {
                           : null,
                 ),
                 const SizedBox(height: 16),
-                // 付款人
+                // 付款人 (Dropdown)
                 const Align(
                   alignment: Alignment.centerLeft,
                   child: Text('付款人'),
@@ -83,12 +85,30 @@ class _AddExpenseDialogState extends ConsumerState<AddExpenseDialog> {
                   isExpanded: true,
                   items: [
                     for (final m in widget.members)
-                      DropdownMenuItem(value: m, child: Text(m))
+                      DropdownMenuItem(
+                        value: m,
+                        child: Consumer(
+                          builder: (context, ref, _) {
+                            final profileAsync =
+                                ref.watch(userProfileProviderFamily(m));
+                            return profileAsync.when(
+                              data: (p) {
+                                final name = (p?.displayName.isNotEmpty == true)
+                                    ? p!.displayName
+                                    : '使用者';
+                                return Text(name);
+                              },
+                              loading: () => const Text('載入中…'),
+                              error: (_, __) => const Text('使用者'),
+                            );
+                          },
+                        ),
+                      ),
                   ],
                   onChanged: (v) => setState(() => _payer = v!),
                 ),
                 const SizedBox(height: 16),
-                // 參與者
+                // 參與者 (Checkbox 區塊)
                 const Align(
                   alignment: Alignment.centerLeft,
                   child: Text('參與者'),
@@ -103,11 +123,28 @@ class _AddExpenseDialogState extends ConsumerState<AddExpenseDialog> {
                       return CheckboxListTile(
                         dense: true,
                         value: _sharedBy.contains(m),
-                        title: Text(m),
+                        title: Consumer(
+                          builder: (context, ref, _) {
+                            final profileAsync =
+                                ref.watch(userProfileProviderFamily(m));
+                            return profileAsync.when(
+                              data: (p) {
+                                final name = (p?.displayName.isNotEmpty == true)
+                                    ? p!.displayName
+                                    : '使用者';
+                                return Text(name);
+                              },
+                              loading: () => const Text('載入中…'),
+                              error: (_, __) => const Text('使用者'),
+                            );
+                          },
+                        ),
                         onChanged: (v) => setState(() {
-                          v!
-                              ? _sharedBy.add(m)
-                              : _sharedBy.remove(m);
+                          if (v == true) {
+                            _sharedBy.add(m);
+                          } else {
+                            _sharedBy.remove(m);
+                          }
                         }),
                       );
                     },
@@ -146,7 +183,7 @@ class _AddExpenseDialogState extends ConsumerState<AddExpenseDialog> {
               createdAt: DateTime.now(),
             );
 
-            Navigator.pop(context, exp); // 回傳 Expense 給呼叫頁
+            Navigator.pop(context, exp);
           },
           child: const Text('儲存'),
         ),

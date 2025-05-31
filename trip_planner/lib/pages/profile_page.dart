@@ -1,4 +1,5 @@
 // lib/pages/profile_page.dart
+
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -20,13 +21,17 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
   final _displayNameCtrl = TextEditingController();
   final _bioCtrl         = TextEditingController();
   final _phoneCtrl       = TextEditingController();
+  final _countryCtrl     = TextEditingController();
+
   bool _loading = false;
+  String _selectedGender = ''; // Male / Female / Other / empty
 
   @override
   void dispose() {
     _displayNameCtrl.dispose();
     _bioCtrl.dispose();
     _phoneCtrl.dispose();
+    _countryCtrl.dispose();
     super.dispose();
   }
 
@@ -51,14 +56,18 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
   Future<void> _saveProfile(UserProfile profile) async {
     setState(() => _loading = true);
     try {
-      final newName  = _displayNameCtrl.text.trim();
-      final newBio   = _bioCtrl.text.trim();
-      final newPhone = _phoneCtrl.text.trim();
+      final newName    = _displayNameCtrl.text.trim();
+      final newBio     = _bioCtrl.text.trim();
+      final newPhone   = _phoneCtrl.text.trim();
+      final newGender  = _selectedGender;
+      final newCountry = _countryCtrl.text.trim();
 
       await ref.read(authRepoProvider).updateUserProfile(
             displayName: newName  != profile.displayName ? newName  : null,
             bio        : newBio   != profile.bio         ? newBio   : null,
             phone      : newPhone != profile.phone       ? newPhone : null,
+            gender     : newGender != profile.gender     ? newGender : null,
+            country    : newCountry != profile.country   ? newCountry : null,
           );
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('已更新個人資料')));
@@ -87,6 +96,8 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
           _displayNameCtrl.text = profile.displayName;
           _bioCtrl.text         = profile.bio;
           _phoneCtrl.text       = profile.phone;
+          _countryCtrl.text     = profile.country;
+          _selectedGender       = profile.gender;
 
           return AbsorbPointer(
             absorbing: _loading,
@@ -107,7 +118,10 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  TextButton(onPressed: _pickAvatar, child: const Text('更換頭像')),
+                  TextButton(
+                    onPressed: _pickAvatar,
+                    child: const Text('更換頭像'),
+                  ),
                   const SizedBox(height: 16),
                   TextFormField(
                     controller: _displayNameCtrl,
@@ -124,6 +138,30 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                     controller: _phoneCtrl,
                     decoration: const InputDecoration(labelText: '電話'),
                     keyboardType: TextInputType.phone,
+                  ),
+                  const SizedBox(height: 12),
+                  // 新增：性別欄位
+                  DropdownButtonFormField<String>(
+                    value: _selectedGender.isEmpty ? null : _selectedGender,
+                    decoration: const InputDecoration(labelText: '性別'),
+                    items: const [
+                      DropdownMenuItem(value: 'Male', child: Text('男')),
+                      DropdownMenuItem(value: 'Female', child: Text('女')),
+                      DropdownMenuItem(value: 'Other', child: Text('其他')),
+                    ],
+                    onChanged: (v) {
+                      setState(() {
+                        _selectedGender = v ?? '';
+                      });
+                    },
+                    isExpanded: true,
+                    hint: const Text('請選擇性別'),
+                  ),
+                  const SizedBox(height: 12),
+                  // 新增：國家欄位
+                  TextFormField(
+                    controller: _countryCtrl,
+                    decoration: const InputDecoration(labelText: '國家'),
                   ),
                   const SizedBox(height: 24),
                   _loading
