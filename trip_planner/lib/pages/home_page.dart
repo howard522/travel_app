@@ -1,8 +1,8 @@
-// lib/pages/home_page.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:shimmer/shimmer.dart';
 
 import '../providers/auth_providers.dart';
 import '../providers/trip_providers.dart';
@@ -19,79 +19,145 @@ class HomePage extends ConsumerWidget {
     final tripRepo = ref.read(tripRepoProvider);
     final user = ref.watch(authStateProvider).value!;
 
+    final scheme = Theme.of(context).colorScheme;
+    final nfDate = DateFormat('yyyy-MM-dd HH:mm');
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('My Trips'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.person),
-            tooltip: '個人資料',
-            onPressed: () => context.push('/profile'),
+      body: CustomScrollView(
+        slivers: [
+          /* ---------- SliverAppBar ---------- */
+          SliverAppBar(
+            floating: true,
+            pinned: true,
+            expandedHeight: 120,
+            flexibleSpace: FlexibleSpaceBar(
+              titlePadding: const EdgeInsetsDirectional.only(start: 16, bottom: 16),
+              title: Text('My Trips',
+                  style: TextStyle(
+                    color: scheme.onPrimaryContainer,
+                    fontWeight: FontWeight.w600,
+                  )),
+              background: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      scheme.primaryContainer,
+                      scheme.secondaryContainer,
+                    ],
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                  ),
+                ),
+              ),
+            ),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.person),
+                tooltip: '個人資料',
+                onPressed: () => context.push('/profile'),
+              ),
+              IconButton(
+                icon: const Icon(Icons.logout),
+                onPressed: authRepo.signOut,
+              ),
+            ],
           ),
-          IconButton(onPressed: authRepo.signOut, icon: const Icon(Icons.logout)),
-        ],
-      ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            invites.when(
-              loading: () => const LinearProgressIndicator(),
+
+          /* ---------- 邀請區 ---------- */
+          SliverToBoxAdapter(
+            child: invites.when(
+              loading: () => const SizedBox(), // 不閃 loader，保持乾淨
               error: (e, _) => Padding(
-                padding: const EdgeInsets.all(8),
+                padding: const EdgeInsets.all(16),
                 child: Text('邀請讀取失敗：$e'),
               ),
               data: (list) => list.isEmpty
                   ? const SizedBox.shrink()
-                  : Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Padding(
-                          padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
-                          child: Text('待接受邀請',
-                              style: TextStyle(
-                                  fontSize: 16, fontWeight: FontWeight.bold)),
-                        ),
-                        for (final t in list)
-                          ListTile(
-                            title: Text(t.title),
-                            subtitle: Text(
-                              DateFormat('yyyy-MM-dd HH:mm')
-                                  .format(t.startTime.toLocal()),
-                            ),
-                            trailing: ElevatedButton(
-                              onPressed: () => tripRepo.acceptInvite(
-                                t.id,
-                                user.uid,
-                                user.email!,
+                  : Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Padding(
+                            padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+                            child: Text('待接受邀請',
+                                style: TextStyle(
+                                    fontSize: 16, fontWeight: FontWeight.bold)),
+                          ),
+                          ...list.map(
+                            (t) => Card(
+                              margin: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 4),
+                              child: ListTile(
+                                title: Text(t.title),
+                                subtitle: Text(nfDate.format(t.startTime.toLocal())),
+                                trailing: ElevatedButton(
+                                  onPressed: () => tripRepo.acceptInvite(
+                                    t.id,
+                                    user.uid,
+                                    user.email!,
+                                  ),
+                                  child: const Text('接受'),
+                                ),
                               ),
-                              child: const Text('接受'),
                             ),
                           ),
-                        const Divider(height: 1),
-                      ],
+                        ],
+                      ),
                     ),
             ),
-            Expanded(
-              child: myTrips.when(
-                loading: () => const Center(child: CircularProgressIndicator()),
-                error: (e, _) => Center(child: Text(e.toString())),
-                data: (list) => list.isEmpty
-                    ? const Center(child: Text('No trip yet'))
-                    : ListView.builder(
-                        itemCount: list.length,
-                        itemBuilder: (_, i) => _TripTile(trip: list[i]),
-                      ),
-              ),
+          ),
+
+          /* ---------- Trip 卡片列表 ---------- */
+          myTrips.when(
+            loading: () => _buildShimmerPlaceholder(),
+            error: (e, _) => SliverFillRemaining(
+              child: Center(child: Text(e.toString())),
             ),
-          ],
-        ),
+            data: (list) => list.isEmpty
+                ? const SliverFillRemaining(
+                    child: Center(child: Text('No trip yet')),
+                  )
+                : SliverList.separated(
+                    itemCount: list.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 4),
+                    itemBuilder: (_, i) => _TripCard(trip: list[i]),
+                  ),
+          ),
+          const SliverToBoxAdapter(child: SizedBox(height: 96)),
+        ],
       ),
-      floatingActionButton: FloatingActionButton(
+
+      /* ---------- FAB：新增 Trip ---------- */
+      floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showNewTripDialog(context, ref),
-        child: const Icon(Icons.add),
+        icon: const Icon(Icons.add),
+        label: const Text('New Trip'),
       ),
     );
   }
+
+  /* ---------- Shimmer 佔位 ---------- */
+
+  Widget _buildShimmerPlaceholder() => SliverList(
+        delegate: SliverChildBuilderDelegate(
+          (context, i) => Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            child: Shimmer.fromColors(
+              baseColor: Colors.grey[300]!,
+              highlightColor: Colors.grey[100]!,
+              child: Container(
+                height: 84,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
+            ),
+          ),
+          childCount: 5,
+        ),
+      );
 
   /* ---------- 新增 Trip Dialog ---------- */
 
@@ -127,9 +193,8 @@ class HomePage extends ConsumerWidget {
                   initialTime: TimeOfDay.fromDateTime(startAt),
                 );
                 if (time == null) return;
-                startAt = DateTime(date.year, date.month, date.day,
-                    time.hour, time.minute);
-                // rebuild dialog
+                startAt = DateTime(
+                    date.year, date.month, date.day, time.hour, time.minute);
                 (context as Element).markNeedsBuild();
               },
             ),
@@ -137,11 +202,13 @@ class HomePage extends ConsumerWidget {
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel')),
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
           ElevatedButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Add')),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Add'),
+          ),
         ],
       ),
     );
@@ -153,29 +220,55 @@ class HomePage extends ConsumerWidget {
 
     await repo.addTrip(
       Trip(
-        id        : '_tmp',
-        title     : titleCtrl.text.trim(),
-        members   : [user.uid],
-        invites   : [],
-        startTime : startAt,
-        endDate   : startAt.add(const Duration(days: 1)),
+        id: '_tmp',
+        title: titleCtrl.text.trim(),
+        members: [user.uid],
+        invites: [],
+        startTime: startAt,
+        endDate: startAt.add(const Duration(days: 1)),
       ),
     );
   }
 }
 
-class _TripTile extends StatelessWidget {
-  const _TripTile({required this.trip});
+/* ───────────────────────────────────────────────
+ * Trip Card + Hero
+ * ──────────────────────────────────────────────*/
+
+class _TripCard extends StatelessWidget {
+  const _TripCard({required this.trip});
   final Trip trip;
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      title: Text(trip.title),
-      subtitle:
-          Text(DateFormat('yyyy-MM-dd HH:mm').format(trip.startTime.toLocal())),
-      trailing: const Icon(Icons.chevron_right),
-      onTap: () => context.push('/trip/${trip.id}'),
+    final nf = DateFormat('yyyy-MM-dd HH:mm');
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      child: Hero(
+        tag: 'trip_${trip.id}',
+        flightShuttleBuilder: (ctx, anim, dir, fromCtx, toCtx) {
+          // 讓卡片在飛行中保持圓角
+          return Material(
+            color: Colors.transparent,
+            child: ScaleTransition(
+              scale: anim.drive(Tween(begin: 1.0, end: dir == HeroFlightDirection.push ? 1.15 : 1.0)
+                  .chain(CurveTween(curve: Curves.easeInOut))),
+              child: fromCtx.widget,
+            ),
+          );
+        },
+        child: Card(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          elevation: 2,
+          child: ListTile(
+            title: Text(trip.title),
+            subtitle: Text(nf.format(trip.startTime.toLocal())),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => context.push('/trip/${trip.id}'),
+          ),
+        ),
+      ),
     );
   }
 }

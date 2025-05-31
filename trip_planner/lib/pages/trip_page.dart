@@ -34,7 +34,8 @@ class TripPage extends ConsumerStatefulWidget {
   ConsumerState<TripPage> createState() => _TripPageState();
 }
 
-class _TripPageState extends ConsumerState<TripPage> with TickerProviderStateMixin {
+class _TripPageState extends ConsumerState<TripPage>
+    with TickerProviderStateMixin {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   GoogleMapController? _mapController;
 
@@ -67,22 +68,37 @@ class _TripPageState extends ConsumerState<TripPage> with TickerProviderStateMix
         if (tripSnapshot.hasError || !tripSnapshot.hasData) {
           return Scaffold(
             body: Center(
-              child: Text('Error loading trip: ${tripSnapshot.error ?? 'No data'}'),
+              child: Text(
+                'Error loading trip: ${tripSnapshot.error ?? 'No data'}',
+              ),
             ),
           );
         }
 
         final trip = tripSnapshot.data!;
         // 計算「從 startDate 到 endDate」的所有日期（純日期，去掉時分）
-        final startDate = DateTime(trip.startTime.year, trip.startTime.month, trip.startTime.day);
-        final endDate = DateTime(trip.endDate.year, trip.endDate.month, trip.endDate.day);
+        final startDate = DateTime(
+          trip.startTime.year,
+          trip.startTime.month,
+          trip.startTime.day,
+        );
+        final endDate = DateTime(
+          trip.endDate.year,
+          trip.endDate.month,
+          trip.endDate.day,
+        );
         final List<DateTime> tripDates = [];
-        for (var d = startDate; !d.isAfter(endDate); d = d.add(const Duration(days: 1))) {
+        for (
+          var d = startDate;
+          !d.isAfter(endDate);
+          d = d.add(const Duration(days: 1))
+        ) {
           tripDates.add(d);
         }
 
         // 初始化或更新 TabController
-        if (_tabController == null || _tabController!.length != tripDates.length) {
+        if (_tabController == null ||
+            _tabController!.length != tripDates.length) {
           _tabController?.dispose();
           _tabController = TabController(length: tripDates.length, vsync: this);
           _tabController!.addListener(() {
@@ -105,7 +121,16 @@ class _TripPageState extends ConsumerState<TripPage> with TickerProviderStateMix
         return Scaffold(
           key: _scaffoldKey,
           appBar: AppBar(
-            title: Text(trip.title),
+            title: Hero(
+              tag: 'trip_${trip.id}',
+              child: Material(
+                type: MaterialType.transparency,
+                child: Text(
+                  trip.title,
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+              ),
+            ),
             bottom: TabBar(
               controller: _tabController,
               isScrollable: true,
@@ -128,20 +153,25 @@ class _TripPageState extends ConsumerState<TripPage> with TickerProviderStateMix
               child: Padding(
                 padding: const EdgeInsets.all(8),
                 child: placesAsync.when(
-                  loading: () => const Center(child: CircularProgressIndicator()),
-                  error: (e, _) => Center(child: Text('Error loading places: $e')),
+                  loading:
+                      () => const Center(child: CircularProgressIndicator()),
+                  error:
+                      (e, _) => Center(child: Text('Error loading places: $e')),
                   data: (allPlaces) {
                     // 取出當前分頁的日期
                     final currentIndex = _tabController!.index;
                     final day = tripDates[currentIndex];
                     // 過濾出屬於 day 的所有 Place
-                    final dayPlaces = allPlaces
-                        .where((p) =>
-                            p.date.year == day.year &&
-                            p.date.month == day.month &&
-                            p.date.day == day.day)
-                        .toList()
-                      ..sort((a, b) => a.order.compareTo(b.order));
+                    final dayPlaces =
+                        allPlaces
+                            .where(
+                              (p) =>
+                                  p.date.year == day.year &&
+                                  p.date.month == day.month &&
+                                  p.date.day == day.day,
+                            )
+                            .toList()
+                          ..sort((a, b) => a.order.compareTo(b.order));
 
                     return _buildSidePanel(
                       context,
@@ -162,7 +192,11 @@ class _TripPageState extends ConsumerState<TripPage> with TickerProviderStateMix
             controller: _tabController,
             children: [
               for (int i = 0; i < tripDates.length; i++)
-                _buildMapForDay(trip, tripDates[i], ref.watch(placesOfTripProvider(widget.tripId))),
+                _buildMapForDay(
+                  trip,
+                  tripDates[i],
+                  ref.watch(placesOfTripProvider(widget.tripId)),
+                ),
             ],
           ),
         );
@@ -181,20 +215,26 @@ class _TripPageState extends ConsumerState<TripPage> with TickerProviderStateMix
       error: (e, _) => Center(child: Text('Error loading places: $e')),
       data: (allPlaces) {
         // 過濾出當天的 places
-        final dayPlaces = allPlaces
-            .where((p) =>
-                p.date.year == day.year &&
-                p.date.month == day.month &&
-                p.date.day == day.day)
-            .toList()
-          ..sort((a, b) => a.order.compareTo(b.order));
+        final dayPlaces =
+            allPlaces
+                .where(
+                  (p) =>
+                      p.date.year == day.year &&
+                      p.date.month == day.month &&
+                      p.date.day == day.day,
+                )
+                .toList()
+              ..sort((a, b) => a.order.compareTo(b.order));
 
         // Map Marker 與自動拉到合適範圍
         final markers = _buildMarkers(dayPlaces);
         _fitBounds(markers);
 
         return GoogleMap(
-          initialCameraPosition: const CameraPosition(target: LatLng(23.5, 121), zoom: 6.5),
+          initialCameraPosition: const CameraPosition(
+            target: LatLng(23.5, 121),
+            zoom: 6.5,
+          ),
           markers: markers,
           polylines: _polylines,
           onMapCreated: (c) => _mapController = c,
@@ -232,7 +272,8 @@ class _TripPageState extends ConsumerState<TripPage> with TickerProviderStateMix
     // 計算 ETA / ETD
     final departureTimes = <DateTime>[displayStartTime];
     for (var i = 0; i < dayPlaces.length - 1; i++) {
-      final durMin = int.tryParse(_durationsMap[dayPlaces[i + 1].id] ?? '0') ?? 0;
+      final durMin =
+          int.tryParse(_durationsMap[dayPlaces[i + 1].id] ?? '0') ?? 0;
       departureTimes.add(
         departureTimes.last
             .add(Duration(minutes: durMin))
@@ -244,12 +285,13 @@ class _TripPageState extends ConsumerState<TripPage> with TickerProviderStateMix
     final startTile = ListTile(
       title: const Text('行程開始時間'),
       subtitle: Text(DateFormat('yyyy-MM-dd HH:mm').format(displayStartTime)),
-      trailing: isFirstDay
-          ? IconButton(
-              icon: const Icon(Icons.edit),
-              onPressed: _pickStartTime,
-            )
-          : null,
+      trailing:
+          isFirstDay
+              ? IconButton(
+                icon: const Icon(Icons.edit),
+                onPressed: _pickStartTime,
+              )
+              : null,
     );
 
     return Column(
@@ -276,22 +318,29 @@ class _TripPageState extends ConsumerState<TripPage> with TickerProviderStateMix
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('${i + 1}. ${dayPlaces[i].name}',
-                            style: const TextStyle(fontSize: 16)),
+                        Text(
+                          '${i + 1}. ${dayPlaces[i].name}',
+                          style: const TextStyle(fontSize: 16),
+                        ),
                         const SizedBox(height: 4),
-                        Text('抵達: ${DateFormat('HH:mm').format(departureTimes[i])}'),
+                        Text(
+                          '抵達: ${DateFormat('HH:mm').format(departureTimes[i])}',
+                        ),
                         Row(
                           children: [
                             const Text('停留 (小時):'),
                             const SizedBox(width: 8),
                             DropdownButton<int>(
                               value: dayPlaces[i].stayHours,
-                              items: List.generate(12, (j) => j + 1)
-                                  .map((h) => DropdownMenuItem(
-                                        value: h,
-                                        child: Text('$h'),
-                                      ))
-                                  .toList(),
+                              items:
+                                  List.generate(12, (j) => j + 1)
+                                      .map(
+                                        (h) => DropdownMenuItem(
+                                          value: h,
+                                          child: Text('$h'),
+                                        ),
+                                      )
+                                      .toList(),
                               onChanged: (h) async {
                                 if (h == null) return;
                                 await repo.updatePlace(
@@ -304,13 +353,17 @@ class _TripPageState extends ConsumerState<TripPage> with TickerProviderStateMix
                           ],
                         ),
                         Text(
-                            '離開: ${DateFormat('HH:mm').format(departureTimes[i].add(Duration(hours: dayPlaces[i].stayHours)))}'),
+                          '離開: ${DateFormat('HH:mm').format(departureTimes[i].add(Duration(hours: dayPlaces[i].stayHours)))}',
+                        ),
                         Align(
                           alignment: Alignment.topRight,
                           child: IconButton(
                             icon: const Icon(Icons.delete_outline),
-                            onPressed: () =>
-                                repo.deletePlace(widget.tripId, dayPlaces[i].id),
+                            onPressed:
+                                () => repo.deletePlace(
+                                  widget.tripId,
+                                  dayPlaces[i].id,
+                                ),
                           ),
                         ),
                       ],
@@ -331,7 +384,8 @@ class _TripPageState extends ConsumerState<TripPage> with TickerProviderStateMix
               children: [
                 Expanded(
                   child: Text(
-                      '段 ${i + 1}: ${dayPlaces[i].name} → ${dayPlaces[i + 1].name}'),
+                    '段 ${i + 1}: ${dayPlaces[i].name} → ${dayPlaces[i + 1].name}',
+                  ),
                 ),
                 DropdownButton<String>(
                   value: _modes[i],
@@ -354,12 +408,14 @@ class _TripPageState extends ConsumerState<TripPage> with TickerProviderStateMix
         const Divider(),
         // 顯示待接受邀請 (全 Trip)
         pendingAsync.when(
-          data: (invites) => invites.isEmpty
-              ? const SizedBox.shrink()
-              : Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: invites.map((e) => Text('• $e')).toList(),
-                ),
+          data:
+              (invites) =>
+                  invites.isEmpty
+                      ? const SizedBox.shrink()
+                      : Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: invites.map((e) => Text('• $e')).toList(),
+                      ),
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (e, _) => Text('Error: $e'),
         ),
@@ -375,10 +431,11 @@ class _TripPageState extends ConsumerState<TripPage> with TickerProviderStateMix
               label: const Text('新增景點'),
             ),
             OutlinedButton.icon(
-              onPressed: () => showDialog(
-                context: context,
-                builder: (_) => AddInviteDialog(tripId: widget.tripId),
-              ),
+              onPressed:
+                  () => showDialog(
+                    context: context,
+                    builder: (_) => AddInviteDialog(tripId: widget.tripId),
+                  ),
               icon: const Icon(Icons.mail_outlined),
               label: const Text('邀請成員'),
             ),
@@ -400,13 +457,13 @@ class _TripPageState extends ConsumerState<TripPage> with TickerProviderStateMix
 
   /// 建立 Marker 列表
   Set<Marker> _buildMarkers(List<Place> places) => {
-        for (var i = 0; i < places.length; i++)
-          Marker(
-            markerId: MarkerId(places[i].id),
-            position: LatLng(places[i].lat, places[i].lng),
-            infoWindow: InfoWindow(title: '${i + 1}. ${places[i].name}'),
-          ),
-      };
+    for (var i = 0; i < places.length; i++)
+      Marker(
+        markerId: MarkerId(places[i].id),
+        position: LatLng(places[i].lat, places[i].lng),
+        infoWindow: InfoWindow(title: '${i + 1}. ${places[i].name}'),
+      ),
+  };
 
   /// 地圖自動調整至包含所有 Marker
   void _fitBounds(Set<Marker> markers) {
@@ -425,7 +482,8 @@ class _TripPageState extends ConsumerState<TripPage> with TickerProviderStateMix
 
   /// 只在第一天可修改 Trip.startTime
   Future<void> _pickStartTime() async {
-    final tripDoc = await ref.read(tripRepoProvider).watchTrip(widget.tripId).first;
+    final tripDoc =
+        await ref.read(tripRepoProvider).watchTrip(widget.tripId).first;
     final current = tripDoc.startTime;
     final date = await showDatePicker(
       context: context,
@@ -434,11 +492,21 @@ class _TripPageState extends ConsumerState<TripPage> with TickerProviderStateMix
       lastDate: DateTime(2100),
     );
     if (date == null) return;
-    final time =
-        await showTimePicker(context: context, initialTime: TimeOfDay.fromDateTime(current));
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(current),
+    );
     if (time == null) return;
-    final newStart = DateTime(date.year, date.month, date.day, time.hour, time.minute);
-    await ref.read(tripRepoProvider).updateTrip(widget.tripId, {'startTime': newStart});
+    final newStart = DateTime(
+      date.year,
+      date.month,
+      date.day,
+      time.hour,
+      time.minute,
+    );
+    await ref.read(tripRepoProvider).updateTrip(widget.tripId, {
+      'startTime': newStart,
+    });
   }
 
   /// 地圖點擊：新增當日自訂景點
@@ -452,54 +520,59 @@ class _TripPageState extends ConsumerState<TripPage> with TickerProviderStateMix
     final ok = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
-      builder: (_) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-        child: Wrap(
-          children: [
-            const ListTile(title: Text('新增自訂景點')),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Column(
-                children: [
-                  TextField(
-                    controller: nameCtrl,
-                    decoration: const InputDecoration(labelText: '景點名稱'),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
+      builder:
+          (_) => Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(context).viewInsets.bottom,
+            ),
+            child: Wrap(
+              children: [
+                const ListTile(title: Text('新增自訂景點')),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Column(
                     children: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context, false),
-                        child: const Text('取消'),
+                      TextField(
+                        controller: nameCtrl,
+                        decoration: const InputDecoration(labelText: '景點名稱'),
                       ),
-                      ElevatedButton(
-                        onPressed: () => Navigator.pop(context, true),
-                        child: const Text('加入景點'),
+                      const SizedBox(height: 12),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, false),
+                            child: const Text('取消'),
+                          ),
+                          ElevatedButton(
+                            onPressed: () => Navigator.pop(context, true),
+                            child: const Text('加入景點'),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
+          ),
     );
     if (ok == true && nameCtrl.text.trim().isNotEmpty) {
-      await ref.read(tripRepoProvider).addPlace(
-        widget.tripId,
-        Place(
-          id: '_tmp',
-          name: nameCtrl.text.trim(),
-          lat: pos.latitude,
-          lng: pos.longitude,
-          order: DateTime.now().millisecondsSinceEpoch,
-          stayHours: 1,
-          note: '',
-          date: day,
-        ),
-      );
+      await ref
+          .read(tripRepoProvider)
+          .addPlace(
+            widget.tripId,
+            Place(
+              id: '_tmp',
+              name: nameCtrl.text.trim(),
+              lat: pos.latitude,
+              lng: pos.longitude,
+              order: DateTime.now().millisecondsSinceEpoch,
+              stayHours: 1,
+              note: '',
+              date: day,
+            ),
+          );
     }
   }
 
@@ -510,20 +583,22 @@ class _TripPageState extends ConsumerState<TripPage> with TickerProviderStateMix
     final segments = <SegmentInfo>[];
 
     for (var i = 0; i < dayPlaces.length - 1; i++) {
-      segments.add(await service.getSegmentInfo(
-        '${dayPlaces[i].lat},${dayPlaces[i].lng}',
-        '${dayPlaces[i + 1].lat},${dayPlaces[i + 1].lng}',
-        _modes[i],
-      ));
+      segments.add(
+        await service.getSegmentInfo(
+          '${dayPlaces[i].lat},${dayPlaces[i].lng}',
+          '${dayPlaces[i + 1].lat},${dayPlaces[i + 1].lng}',
+          _modes[i],
+        ),
+      );
     }
 
     final allPoints = <LatLng>[];
     final decoder = PolylinePoints();
     for (final seg in segments) {
       allPoints.addAll(
-        decoder.decodePolyline(seg.polyline).map(
-          (p) => LatLng(p.latitude, p.longitude),
-        ),
+        decoder
+            .decodePolyline(seg.polyline)
+            .map((p) => LatLng(p.latitude, p.longitude)),
       );
     }
 
@@ -553,47 +628,56 @@ class _TripPageState extends ConsumerState<TripPage> with TickerProviderStateMix
 
     final picked = await showDialog<PlaceSuggestion>(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (_, setState) => AlertDialog(
-          title: const Text('搜尋景點'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: query,
-                decoration: const InputDecoration(hintText: '輸入關鍵字'),
-              ),
-              const SizedBox(height: 8),
-              ElevatedButton(
-                onPressed: () async {
-                  final key = const String.fromEnvironment('PLACES_API_KEY');
-                  if (key.isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('請設定 PLACES_API_KEY')),
-                    );
-                    return;
-                  }
-                  results = await PlaceSearchService(key).search(query.text);
-                  setState(() {});
-                },
-                child: const Text('搜尋'),
-              ),
-              if (results != null)
-                SizedBox(
-                  height: 240,
-                  width: 300,
-                  child: ListView.builder(
-                    itemCount: results!.length,
-                    itemBuilder: (_, i) => ListTile(
-                      title: Text(results![i].name),
-                      onTap: () => Navigator.pop(ctx, results![i]),
-                    ),
+      builder:
+          (ctx) => StatefulBuilder(
+            builder:
+                (_, setState) => AlertDialog(
+                  title: const Text('搜尋景點'),
+                  content: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextField(
+                        controller: query,
+                        decoration: const InputDecoration(hintText: '輸入關鍵字'),
+                      ),
+                      const SizedBox(height: 8),
+                      ElevatedButton(
+                        onPressed: () async {
+                          final key = const String.fromEnvironment(
+                            'PLACES_API_KEY',
+                          );
+                          if (key.isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('請設定 PLACES_API_KEY'),
+                              ),
+                            );
+                            return;
+                          }
+                          results = await PlaceSearchService(
+                            key,
+                          ).search(query.text);
+                          setState(() {});
+                        },
+                        child: const Text('搜尋'),
+                      ),
+                      if (results != null)
+                        SizedBox(
+                          height: 240,
+                          width: 300,
+                          child: ListView.builder(
+                            itemCount: results!.length,
+                            itemBuilder:
+                                (_, i) => ListTile(
+                                  title: Text(results![i].name),
+                                  onTap: () => Navigator.pop(ctx, results![i]),
+                                ),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
-            ],
           ),
-        ),
-      ),
     );
 
     if (picked != null) {
