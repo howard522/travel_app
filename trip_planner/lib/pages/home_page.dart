@@ -1,15 +1,17 @@
+// lib/pages/home_page.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
-import 'package:shimmer/shimmer.dart';
 
 import '../providers/auth_providers.dart';
 import '../providers/trip_providers.dart';
 import '../models/trip.dart';
+import '../repositories/trip_repository.dart';
 
 class HomePage extends ConsumerWidget {
-  const HomePage({super.key});
+  const HomePage({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -19,79 +21,51 @@ class HomePage extends ConsumerWidget {
     final tripRepo = ref.read(tripRepoProvider);
     final user = ref.watch(authStateProvider).value!;
 
-    final scheme = Theme.of(context).colorScheme;
-    final nfDate = DateFormat('yyyy-MM-dd HH:mm');
-
     return Scaffold(
-      body: CustomScrollView(
-        slivers: [
-          /* ---------- SliverAppBar ---------- */
-          SliverAppBar(
-            floating: true,
-            pinned: true,
-            expandedHeight: 120,
-            flexibleSpace: FlexibleSpaceBar(
-              titlePadding: const EdgeInsetsDirectional.only(start: 16, bottom: 16),
-              title: Text('My Trips',
-                  style: TextStyle(
-                    color: scheme.onPrimaryContainer,
-                    fontWeight: FontWeight.w600,
-                  )),
-              background: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      scheme.primaryContainer,
-                      scheme.secondaryContainer,
-                    ],
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                  ),
-                ),
-              ),
-            ),
-            actions: [
-              IconButton(
-                icon: const Icon(Icons.person),
-                tooltip: '個人資料',
-                onPressed: () => context.push('/profile'),
-              ),
-              IconButton(
-                icon: const Icon(Icons.logout),
-                onPressed: authRepo.signOut,
-              ),
-            ],
+      appBar: AppBar(
+        title: const Text('My Trips'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.person),
+            tooltip: '個人資料',
+            onPressed: () => context.push('/profile'),
           ),
-
-          /* ---------- 邀請區 ---------- */
-          SliverToBoxAdapter(
-            child: invites.when(
-              loading: () => const SizedBox(), // 不閃 loader，保持乾淨
+          IconButton(onPressed: authRepo.signOut, icon: const Icon(Icons.logout)),
+        ],
+      ),
+      body: SafeArea(
+        child: Column(
+          children: [
+            // ===== 待接受邀請 區塊 =====
+            invites.when(
+              loading: () => const LinearProgressIndicator(),
               error: (e, _) => Padding(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(8),
                 child: Text('邀請讀取失敗：$e'),
               ),
               data: (list) => list.isEmpty
                   ? const SizedBox.shrink()
-                  : Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Padding(
-                            padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
-                            child: Text('待接受邀請',
-                                style: TextStyle(
-                                    fontSize: 16, fontWeight: FontWeight.bold)),
-                          ),
-                          ...list.map(
-                            (t) => Card(
-                              margin: const EdgeInsets.symmetric(
-                                  horizontal: 16, vertical: 4),
-                              child: ListTile(
-                                title: Text(t.title),
-                                subtitle: Text(nfDate.format(t.startTime.toLocal())),
-                                trailing: ElevatedButton(
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Padding(
+                          padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
+                          child: Text('待接受邀請',
+                              style: TextStyle(
+                                  fontSize: 16, fontWeight: FontWeight.bold)),
+                        ),
+                        for (final t in list)
+                          ListTile(
+                            title: Text(t.title),
+                            subtitle: Text(
+                              DateFormat('yyyy-MM-dd HH:mm')
+                                  .format(t.startTime.toLocal()),
+                            ),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                // 接受邀請
+                                ElevatedButton(
                                   onPressed: () => tripRepo.acceptInvite(
                                     t.id,
                                     user.uid,
@@ -99,106 +73,134 @@ class HomePage extends ConsumerWidget {
                                   ),
                                   child: const Text('接受'),
                                 ),
-                              ),
+                                const SizedBox(width: 8),
+                                // 拒絕邀請
+                                OutlinedButton(
+                                  onPressed: () => tripRepo.declineInvite(
+                                    t.id,
+                                    user.email!,
+                                  ),
+                                  child: const Text('拒絕'),
+                                ),
+                              ],
                             ),
                           ),
-                        ],
-                      ),
+                        const Divider(height: 1),
+                      ],
                     ),
             ),
-          ),
 
-          /* ---------- Trip 卡片列表 ---------- */
-          myTrips.when(
-            loading: () => _buildShimmerPlaceholder(),
-            error: (e, _) => SliverFillRemaining(
-              child: Center(child: Text(e.toString())),
+            // ===== 我的行程 區塊 =====
+            Expanded(
+              child: myTrips.when(
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (e, _) => Center(child: Text(e.toString())),
+                data: (list) => list.isEmpty
+                    ? const Center(child: Text('No trip yet'))
+                    : ListView.builder(
+                        itemCount: list.length,
+                        itemBuilder: (_, i) => _TripTile(trip: list[i]),
+                      ),
+              ),
             ),
-            data: (list) => list.isEmpty
-                ? const SliverFillRemaining(
-                    child: Center(child: Text('No trip yet')),
-                  )
-                : SliverList.separated(
-                    itemCount: list.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 4),
-                    itemBuilder: (_, i) => _TripCard(trip: list[i]),
-                  ),
-          ),
-          const SliverToBoxAdapter(child: SizedBox(height: 96)),
-        ],
+          ],
+        ),
       ),
-
-      /* ---------- FAB：新增 Trip ---------- */
-      floatingActionButton: FloatingActionButton.extended(
+      floatingActionButton: FloatingActionButton(
         onPressed: () => _showNewTripDialog(context, ref),
-        icon: const Icon(Icons.add),
-        label: const Text('New Trip'),
+        child: const Icon(Icons.add),
       ),
     );
   }
 
-  /* ---------- Shimmer 佔位 ---------- */
-
-  Widget _buildShimmerPlaceholder() => SliverList(
-        delegate: SliverChildBuilderDelegate(
-          (context, i) => Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-            child: Shimmer.fromColors(
-              baseColor: Colors.grey[300]!,
-              highlightColor: Colors.grey[100]!,
-              child: Container(
-                height: 84,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
-            ),
-          ),
-          childCount: 5,
-        ),
-      );
-
-  /* ---------- 新增 Trip Dialog ---------- */
-
+  /// 顯示「新增 Trip Dialog」，並讓使用者自行輸入天數 (1~365)
   Future<void> _showNewTripDialog(BuildContext context, WidgetRef ref) async {
     final titleCtrl = TextEditingController();
     DateTime startAt = DateTime.now();
+
+    // 新增：用於讓使用者輸入天數
+    final daysCtrl = TextEditingController(text: '1');
+
+    final formKey = GlobalKey<FormState>();
 
     final ok = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('New Trip'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: titleCtrl,
-              decoration: const InputDecoration(hintText: 'Trip title'),
-            ),
-            const SizedBox(height: 16),
-            ListTile(
-              title: Text('Start: ${DateFormat('yyyy-MM-dd HH:mm').format(startAt)}'),
-              trailing: const Icon(Icons.edit_calendar_outlined),
-              onTap: () async {
-                final date = await showDatePicker(
-                  context: context,
-                  initialDate: startAt,
-                  firstDate: DateTime(2020),
-                  lastDate: DateTime(2100),
-                );
-                if (date == null) return;
-                final time = await showTimePicker(
-                  context: context,
-                  initialTime: TimeOfDay.fromDateTime(startAt),
-                );
-                if (time == null) return;
-                startAt = DateTime(
-                    date.year, date.month, date.day, time.hour, time.minute);
-                (context as Element).markNeedsBuild();
-              },
-            ),
-          ],
+        content: StatefulBuilder(
+          builder: (ctx, setState) {
+            return Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Trip title
+                  TextFormField(
+                    controller: titleCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Trip title',
+                    ),
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty) {
+                        return '請輸入行程標題';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  // Start time 選擇
+                  ListTile(
+                    title: Text(
+                      'Start: ${DateFormat('yyyy-MM-dd HH:mm').format(startAt)}',
+                    ),
+                    trailing: const Icon(Icons.edit_calendar_outlined),
+                    onTap: () async {
+                      final date = await showDatePicker(
+                        context: context,
+                        initialDate: startAt,
+                        firstDate: DateTime(2020),
+                        lastDate: DateTime(2100),
+                      );
+                      if (date != null) {
+                        final time = await showTimePicker(
+                          context: context,
+                          initialTime: TimeOfDay.fromDateTime(startAt),
+                        );
+                        if (time != null) {
+                          startAt = DateTime(date.year, date.month, date.day,
+                              time.hour, time.minute);
+                          // 重新繪製 Dialog UI
+                          (ctx as Element).markNeedsBuild();
+                        }
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  // 新增：天數輸入框 (1~365)
+                  TextFormField(
+                    controller: daysCtrl,
+                    decoration: const InputDecoration(
+                      labelText: '天數 (1~365)',
+                    ),
+                    keyboardType: TextInputType.number,
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty) {
+                        return '請輸入天數';
+                      }
+                      final parsed = int.tryParse(v.trim());
+                      if (parsed == null) {
+                        return '請輸入有效整數';
+                      }
+                      if (parsed < 1 || parsed > 365) {
+                        return '天數範圍必須在 1~365';
+                      }
+                      return null;
+                    },
+                  ),
+                ],
+              ),
+            );
+          },
         ),
         actions: [
           TextButton(
@@ -206,69 +208,61 @@ class HomePage extends ConsumerWidget {
             child: const Text('Cancel'),
           ),
           ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
+            onPressed: () {
+              // 按下 Add 之前先檢查表單 validator
+              if (formKey.currentState?.validate() == true) {
+                Navigator.pop(context, true);
+              }
+            },
             child: const Text('Add'),
           ),
         ],
       ),
     );
 
-    if (ok != true || titleCtrl.text.trim().isEmpty) return;
+    if (ok != true) return;
+
+    // 驗證通過後，提取輸入值並轉為 int
+    final title = titleCtrl.text.trim();
+    final daysInput = daysCtrl.text.trim();
+    final parsedDays = int.parse(daysInput);
 
     final user = ref.read(authStateProvider).value!;
     final repo = ref.read(tripRepoProvider);
 
+    // 計算 endDate：startAt 當天算第 1 天，days=1 就當天結束；days>1 往後推 (days-1) 天
+    final endDate = DateTime(
+      startAt.year,
+      startAt.month,
+      startAt.day,
+    ).add(Duration(days: parsedDays - 1));
+
     await repo.addTrip(
       Trip(
-        id: '_tmp',
-        title: titleCtrl.text.trim(),
-        members: [user.uid],
-        invites: [],
+        id:        '_tmp',
+        title:     title,
+        members:   [user.uid],
+        invites:   [],
         startTime: startAt,
-        endDate: startAt.add(const Duration(days: 1)),
+        endDate:   endDate,
       ),
     );
   }
 }
 
-/* ───────────────────────────────────────────────
- * Trip Card + Hero
- * ──────────────────────────────────────────────*/
-
-class _TripCard extends StatelessWidget {
-  const _TripCard({required this.trip});
+/// My Trips 列表中的每一個 Tile
+class _TripTile extends StatelessWidget {
+  const _TripTile({Key? key, required this.trip}) : super(key: key);
   final Trip trip;
 
   @override
   Widget build(BuildContext context) {
-    final nf = DateFormat('yyyy-MM-dd HH:mm');
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      child: Hero(
-        tag: 'trip_${trip.id}',
-        flightShuttleBuilder: (ctx, anim, dir, fromCtx, toCtx) {
-          // 讓卡片在飛行中保持圓角
-          return Material(
-            color: Colors.transparent,
-            child: ScaleTransition(
-              scale: anim.drive(Tween(begin: 1.0, end: dir == HeroFlightDirection.push ? 1.15 : 1.0)
-                  .chain(CurveTween(curve: Curves.easeInOut))),
-              child: fromCtx.widget,
-            ),
-          );
-        },
-        child: Card(
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          elevation: 2,
-          child: ListTile(
-            title: Text(trip.title),
-            subtitle: Text(nf.format(trip.startTime.toLocal())),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => context.push('/trip/${trip.id}'),
-          ),
-        ),
-      ),
+    return ListTile(
+      title: Text(trip.title),
+      subtitle:
+          Text(DateFormat('yyyy-MM-dd HH:mm').format(trip.startTime.toLocal())),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: () => context.push('/trip/${trip.id}'),
     );
   }
 }

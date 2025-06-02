@@ -191,7 +191,7 @@ class _TripSidePanelState extends ConsumerState<TripSidePanel> {
 
             // 計算需要的 modes 長度 (dayPlaces.length - 1)
             final needed = (dayPlaces.length - 1);
-            // 如果 _modes 長度不對，就用預設值補一份，不直接改 _modes
+            // 如果 _modes 長度不對，就用預設值補一份，不直接改 _modes`
             final modesForBuild = (_modes.length == needed)
                 ? _modes
                 : List<String>.filled(needed, 'driving');
