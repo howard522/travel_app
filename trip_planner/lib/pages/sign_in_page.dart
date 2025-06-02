@@ -126,12 +126,10 @@ class _SignInPageState extends ConsumerState<SignInPage> {
                                           pwd: pwd,
                                         );
                                       }
-                                      // 成功後，FirebaseAuth 的 authStateChanges 會觸發
+                                      // 成功後，FirebaseAuth.authStateChanges() 會觸發，導到 Home
                                     } on Exception catch (e) {
-                                      // 顯示錯誤訊息
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(content: Text(e.toString())),
-                                      );
+                                      // 顯示錯誤訊息 (dialog)
+                                      _showErrorDialog(context, e.toString());
                                     } finally {
                                       if (mounted) {
                                         setState(() {
@@ -156,11 +154,10 @@ class _SignInPageState extends ConsumerState<SignInPage> {
                               : 'No account? Register'),
                         ),
                         const SizedBox(height: 24),
-                        // Google 登入 按鈕：改為永遠傳入非空同步 function
+                        // Google 登入 按鈕
                         SignInButton(
                           Buttons.Google,
                           onPressed: () {
-                            // 如果正在 loading，就不做任何事
                             if (_isLoading) return;
                             _handleGoogleSignIn(authRepo, context);
                           },
@@ -175,13 +172,13 @@ class _SignInPageState extends ConsumerState<SignInPage> {
         );
       },
       loading: () {
-        // 判斷 FirebaseAuth.authStateChanges() 還在載入中
+        // FirebaseAuth.authStateChanges() 還在載入
         return const Scaffold(
           body: Center(child: CircularProgressIndicator()),
         );
       },
       error: (e, _) {
-        // 探測 authState 時發生錯誤
+        // 監聽 FirebaseAuth.authStateChanges() 發生錯誤
         return Scaffold(
           body: Center(child: Text('Error: $e')),
         );
@@ -189,7 +186,7 @@ class _SignInPageState extends ConsumerState<SignInPage> {
     );
   }
 
-  /// 處理 Google 登入的邏輯
+  /// 處理 Google 登入，並在失敗時顯示 Dialog
   Future<void> _handleGoogleSignIn(
       AuthRepository authRepo, BuildContext context) async {
     setState(() {
@@ -197,11 +194,9 @@ class _SignInPageState extends ConsumerState<SignInPage> {
     });
     try {
       await authRepo.signInWithGoogle();
-      // 成功後，authStateChanges 會觸發頁面轉跳
+      // 成功後會透過 authStateChanges 自動轉跳
     } on Exception catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Google 登入失敗：${e.toString()}')),
-      );
+      _showErrorDialog(context, 'Google 登入失敗：${e.toString()}');
     } finally {
       if (mounted) {
         setState(() {
@@ -209,5 +204,22 @@ class _SignInPageState extends ConsumerState<SignInPage> {
         });
       }
     }
+  }
+
+  /// 顯示錯誤對話框 (dialog)
+  void _showErrorDialog(BuildContext context, String message) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('登入失敗'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('好'),
+          ),
+        ],
+      ),
+    );
   }
 }
