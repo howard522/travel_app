@@ -1,4 +1,3 @@
-// lib/router/app_router.dart
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -8,7 +7,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../pages/sign_in_page.dart';
 import '../pages/home_page.dart';
 import '../pages/profile_page.dart';
-import '../pages/trip_page.dart';
+// 修正：TripPage 位置移到 pages/trip/trip_page.dart
+import '../pages/trip/trip_page.dart';
 import '../pages/expense_page.dart';
 import '../pages/chat_page.dart';
 
@@ -32,10 +32,10 @@ final appRouter = GoRouter(
                   ExpensePage(tripId: state.pathParameters['id']!),
             ),
             GoRoute(
-      path: 'chat',
-      builder: (_, state) =>
-        ChatPage(tripId: state.pathParameters['id']!),
-    ),
+              path: 'chat',
+              builder: (_, state) =>
+                  ChatPage(tripId: state.pathParameters['id']!),
+            ),
           ],
         ),
       ],
