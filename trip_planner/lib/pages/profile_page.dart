@@ -5,6 +5,9 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/services.dart';
 
 import '../models/user_profile.dart';
 import '../providers/profile_providers.dart';
@@ -36,20 +39,55 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
   }
 
   Future<void> _pickAvatar() async {
+    // 如果已經在上傳或已在挑選就不要重複執行
+    if (_loading) return;
+
     final picker = ImagePicker();
-    final XFile? img = await picker.pickImage(
-      source: ImageSource.gallery,
-      imageQuality: 80,
-    );
-    if (img == null) return;
-    setState(() => _loading = true);
+    XFile? img;
     try {
-      await ref.read(authRepoProvider).uploadAvatar(File(img.path));
+      img = await picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 80,
+      );
+    } on PlatformException catch (e) {
+      // Image Picker 本身可能拋出的例外（像是 picker 已經 active）
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('選擇圖片失敗：${e.message ?? e.toString()}')),
+      );
+      return;
     } catch (e) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('上傳失敗：$e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('選擇圖片異常：$e')),
+      );
+      return;
+    }
+
+    if (img == null) {
+      // 使用者取消選圖
+      return;
+    }
+
+    setState(() => _loading = true);
+
+    try {
+      // 嘗試上傳到 Firebase Storage
+      await ref.read(authRepoProvider).uploadAvatar(File(img.path));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('頭像上傳成功')),
+      );
+    } on FirebaseException catch (e) {
+      // Firebase / Storage 發生的例外，例如 404、沒權限、session 終止等等
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('上傳失敗：${e.message ?? e.toString()}')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('未知錯誤：$e')),
+      );
     } finally {
-      setState(() => _loading = false);
+      if (mounted) {
+        setState(() => _loading = false);
+      }
     }
   }
 
@@ -75,7 +113,9 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text('更新失敗：$e')));
     } finally {
-      setState(() => _loading = false);
+      if (mounted) {
+        setState(() => _loading = false);
+      }
     }
   }
 
